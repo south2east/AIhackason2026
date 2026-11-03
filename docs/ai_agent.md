@@ -2,7 +2,7 @@
 
 > 対象: 全日本AIハッカソン 2026 決勝（2026-11-07 土, 11:30–14:30, 2人チーム）
 > 調査日: 2026-11-02。モデルIDやSDKは変わりやすいので、実装前に公式ドキュメントで確認すること。
-> 関連: `physical_ai_vlm.md`（VLMで実物を狙い通りに動かす手法、toio の実装メモ）
+> 関連: `physical_ai_vlm.md`（VLMで実物を狙い通りに動かす手法）
 >
 > **コーディングエージェントへ:** Part A は作品に組み込むエージェントの設計指針とコード、Part B は論文リスト、付録は実務ガイドと公式ドキュメントへのリンク。構成は Next.js（フロント）＋ FastAPI（Python バックエンド）。APIキーはバックエンドの環境変数にだけ置く。
 
@@ -158,7 +158,7 @@ def run_agent_events(user_text: str, max_steps: int = 8, time_limit_s: float = 6
 ## A5. 構造化出力で UI とつなぐ
 
 - LLMが返すJSONを、そのままUIの部品に対応させる（簡易な Generative UI）。例: `{"cards":[{"title":..,"emoji":..,"score":..}], "next_question": ..}` を受け取り、React でカードとして描画する。
-- 各社の指定方法: Claude は `output_config.format`、Gemini は `response_format`、OpenAI は `text.format`（コードは `physical_ai_vlm.md` §5.1）。
+- 各社の指定方法: Claude は `output_config.format`、Gemini は `response_format`、OpenAI は `text.format`（`physical_ai_vlm.md` §3.2）。
 - スキーマはフラットに、enum を使う。「なし」は番兵値（`-1` や空文字）で表す。
 
 ## A6. 生成 → 評価 → 改善（Evaluator-Optimizer / LLM-as-a-Judge）

@@ -1,9 +1,9 @@
 # Physical AI × VLM 実戦ガイド — VLMに「狙い通りに」動いてもらう手法
 
 > 対象: 全日本AIハッカソン 2026 決勝（2026-11-07 土, 11:30–14:30, 2人チーム, ベルサール渋谷ファースト）
-> 調査日: 2026-11-02。モデルIDやSDKの書き方は変わりやすいので、実装前に §5 のリンク先で最終確認すること。
+> 調査日: 2026-11-02。モデルIDやSDKの書き方は変わりやすいので、実装前に付録の公式ドキュメントで最終確認すること。
 >
-> **コーディングエージェントへ:** この資料は「カメラ画像などを見たVLMの判断で、実物（toio等）や画面内のものを狙い通りに動かす」ための設計指針とコード断片です。コード断片はそのまま使ってよいが、APIキーは必ずバックエンド（Python）側だけで扱い、フロント（Next.js）の `NEXT_PUBLIC_*` に入れないこと。
+> **コーディングエージェントへ:** この資料は「カメラ画像などを見たVLMの判断で、実物（toio等）や画面内のものを狙い通りに動かす」ための設計指針とコード断片です。コード断片はそのまま使ってよいが、APIキーは必ずバックエンド側だけで扱い、フロントに置かないこと。
 
 ---
 
@@ -19,7 +19,7 @@
 | 前例 | 予選5th（2026-07-25 東京）で各チームに **toio 2台** を配布。テーマは『夏×toio』『Radical Atoms×円×toio』『友×toio』。審査員はtoio開発者 | [公式レポート](https://www.aifestival.jp/news/japanaihack2026-05) |
 | 決勝のハード | **未発表**。toio か別のハードが出る可能性に備える | — |
 
-この資料の範囲: VLM（画像を理解するLLM）を「頭」にして、物理的なもの（主にtoio）を思い通りに動かすための手法。VLA（ロボット制御そのものを学習したモデル）の研究は §9 で概観のみ。
+この資料の範囲: VLM（画像を理解するLLM）を「頭」にして、物理的なもの（主にtoio）を思い通りに動かすための手法。VLA（ロボット制御そのものを学習したモデル）は扱わない。
 
 ---
 
@@ -41,12 +41,12 @@
 ## 2. 基本アーキテクチャ — 遅い頭 ＋ 速い体
 
 ```
-[カメラ(PC or スマホ)] --JPEG--> [Next.js (Chrome)] --POST /decide--> [FastAPI (Python)]
-                                   |    ^                              | 1) 画像に印/グリッドを描く
-                                   |    |                              | 2) VLM呼び出し（構造化出力）
-                                   |    +------- action JSON ----------+ 3) 検証・丸め・座標変換
+[カメラ(PC or スマホ)] --JPEG--> [ブラウザ (Chrome)] --画像--> [バックエンド]
+                                   |    ^                       | 1) 画像に印/グリッドを描く
+                                   |    |                       | 2) VLM呼び出し（構造化出力）
+                                   |    +------- action JSON ---+ 3) 検証・丸め・座標変換
                                    v
-                    [Web Bluetooth] --> toio（「目標座標へ移動」は toio 自身が実行）
+                                  toio（「目標座標へ移動」は toio 自身が実行）
                                    ^
                     Position ID 通知 (x, y, 角度) --> 次のプロンプトにテキストで入れる
 ```
@@ -56,7 +56,7 @@
 | 頭（VLM） | 状況の理解、目標の選択、成功判定 | 0.5〜5秒/回 | 「赤いブロックの近くの3番へ行く」 |
 | 体（ローカル） | 移動制御、検出、安全停止 | ミリ秒 | toioの目標座標移動、色検出、MediaPipe、タイムアウト |
 
-研究との対応（§9で詳しく）: SayCan（LLMは選択肢から選ぶ）、Inner Monologue（結果を言葉で返す閉ループ）、Gemini Robotics 1.5（考える役ERと動く役VLAの分業）、GR00T N1（遅い System 2 と速い System 1 の二重構造）。どれも同じ考え方で、この資料はそれをハッカソン規模に縮めたもの。
+研究との対応: SayCan（LLMは選択肢から選ぶ）、Inner Monologue（結果を言葉で返す閉ループ）、Gemini Robotics 1.5（考える役ERと動く役VLAの分業）、GR00T N1（遅い System 2 と速い System 1 の二重構造）。どれも同じ考え方で、この資料はそれをハッカソン規模に縮めたもの。
 
 ---
 
@@ -76,7 +76,7 @@
 
 - スキーマは**フラット**にし、`enum` と整数を使う。「なし」は `-1` のような番兵値で表す。`oneOf` やnull許容の型は各社で対応に差があるので避けると移植しやすい。
 - 受け取ったら Pydantic で再検証する。範囲外の値は丸め（clamp）、失敗したら1回だけ再試行し、だめなら `stop` にする。
-- 各社の指定方法（§5にコードあり）:
+- 各社の指定方法:
   - Claude: `output_config={"format": {"type": "json_schema", "schema": ...}}`
   - Gemini: `response_format={"type": "text", "mime_type": "application/json", "schema": ...}`（Interactions API）
   - OpenAI: `text={"format": {"type": "json_schema", ...}}`（Responses API）
@@ -274,420 +274,66 @@ for step in range(MAX_STEPS):          # 例: 6
 | 幻覚 | 無い物を「ある」と言う | 「見えない（not_found）」の選択肢を用意する | Gemini Robotics-ER ドキュメント |
 | 遅延 | 1回に数秒かかる | 二層構造、並列化、小さいモデル | — |
 
-**カメラの置き方:** 真上からの固定撮影が最強。スマホをスタンドで真上に固定し、同じWebページをスマホのChromeで開いて「撮影・送信係」にする。`getUserMedia` はHTTPSが必要。iPhoneのSafariでもカメラは使えるが、Web Bluetoothは使えない。
+**カメラの置き方:** 真上からの固定撮影が最強。スマホをスタンドで真上に固定し、同じWebページをスマホのChromeで開いて「撮影・送信係」にする。`getUserMedia` はHTTPSが必要。iPhoneのSafariでもカメラは使える。
 
 ---
 
-## 5. 各社VLM APIの比較（2026-11-02時点）
-
-| | Gemini | Claude | OpenAI |
-|---|---|---|---|
-| 汎用モデル | `gemini-3.8-flash`（新規推奨）、`gemini-3.5-flash-lite`（軽量）、`gemini-4-argon`（最上位） | `claude-opus-5-5`（既定）、`claude-sonnet-5-5`、`claude-haiku-5-5`（軽量） | `gpt-6-astra`（最上位）、`gpt-6.1-sol`、`gpt-6.1-terra`（高速）、`gpt-6-luna`（最安） |
-| 物理・空間推論の専用モデル | **`gemini-robotics-er-2-preview`**（2026-07-30公開。pointing、ボックス、軌道、ロボットの段取り。ER 1.6 は廃止） | なし（汎用モデルで対応） | なし |
-| 座標の出力 | 正規化 `[y, x]` 0–1000 | 送った画像のピクセル座標（高解像度モデルは1:1） | 位置特定は苦手と公式に記載 |
-| 構造化出力 | `response_format` + schema | `output_config.format`（json_schema）、`strict: true` のツール | `text.format`（json_schema） |
-| リアルタイム | Live API（`gemini-3.8-live`、ER 2 streaming） | — | Realtime API（`gpt-realtime-2.1` など） |
-| こんなときに | **物の位置を指す・検出する**のが主目的 | 判断・計画・ツール呼び出し・図表の読解 | 音声対話との組み合わせ |
-| 注意 | ER系は**利用制限を付けていないAPIキーだと 403** になる（キーに制限を設定する） | 思考は常にオンで、深さは `effort` で調整（Opus 5.5 の既定は `medium`） | 画像の `detail`（low / high / original / auto） |
-
-**おすすめの組み合わせ:**
-- 位置を指す・検出する役は Gemini（ER 2 または 3.8 Flash）。
-- 判断と行動選択は、印を選ばせる方式（3.4）にすればどのモデルでも安定する。
-- 迷ったら「Gemini で候補を列挙 → 印を描く → 好きなモデルで番号を選ぶ」の2段構成にする。
-
-### 5.1 共通アダプタ（Python）
-
-```python
-# vlm.py — 画像(JPEG base64) + プロンプト → Decision（schema.py）
-import json, os
-from schema import Decision
-
-PROVIDER = os.getenv("VLM_PROVIDER", "gemini")   # "gemini" | "claude" | "openai"
-
-def decide(image_b64: str, prompt: str) -> Decision:
-    return {"gemini": _gemini, "claude": _claude, "openai": _openai}[PROVIDER](image_b64, prompt)
-```
-
-**Claude**（`pip install anthropic`。キーは環境変数 `ANTHROPIC_API_KEY`）
-
-```python
-import anthropic
-_claude_client = anthropic.Anthropic()
-
-def _claude(image_b64: str, prompt: str) -> Decision:
-    resp = _claude_client.beta.messages.create(
-        model="claude-opus-5-5",
-        max_tokens=16000,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",            # 安全上の理由で断られたとき、サーバ側で別モデルにフォールバック
-        output_config={
-            "effort": "low",            # 速度優先。Opus 5.5 の既定は medium
-            "format": {"type": "json_schema", "schema": _strict_schema()},
-        },
-        messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
-            {"type": "text", "text": prompt},
-        ]}],
-    )
-    if resp.stop_reason == "refusal":
-        return Decision(observation="", reasoning="モデルが応答を拒否", action="stop",
-                        mark_id=-1, rotate_deg=0, speech="", done=False)
-    text = next(b.text for b in resp.content if b.type == "text")
-    return Decision.model_validate_json(text)
-
-def _strict_schema():
-    s = Decision.model_json_schema()
-    s["additionalProperties"] = False      # json_schema では additionalProperties: false が必要
-    return s
-```
-
-**Gemini**（`pip install google-genai`。キーは環境変数 `GEMINI_API_KEY`。Interactions API の書き方）
-
-```python
-from google import genai
-_gemini_client = genai.Client()
-
-def _gemini(image_b64: str, prompt: str) -> Decision:
-    interaction = _gemini_client.interactions.create(
-        model="gemini-3.8-flash",       # 位置を指すのが主目的なら "gemini-robotics-er-2-preview"
-        input=[
-            {"type": "text", "text": prompt},                                       # テキストを画像より先に置く（公式推奨）
-            {"type": "image", "data": image_b64, "mime_type": "image/jpeg"},        # ※部品の形は公式サンプルで要確認
-        ],
-        response_format={"type": "text", "mime_type": "application/json",
-                         "schema": Decision.model_json_schema()},
-        generation_config={"thinking_level": "low"},
-    )
-    return Decision.model_validate_json(interaction.output_text)
-```
-
-> Gemini の「点で指す」プロンプト例（公式より）: `Point to no more than 10 items in the image. The label returned should be an identifying name for the object detected. The points are in [y, x] format normalized to 0-1000.` 出力は `[{"point": [y, x], "label": "..."}]` 形式。
-
-**OpenAI**（`pip install openai`。キーは環境変数 `OPENAI_API_KEY`。Responses API）
-
-```python
-from openai import OpenAI
-_openai_client = OpenAI()
-
-def _openai(image_b64: str, prompt: str) -> Decision:
-    resp = _openai_client.responses.create(
-        model="gpt-6.1-sol",
-        input=[{"role": "user", "content": [
-            {"type": "input_text", "text": prompt},
-            {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}", "detail": "high"},
-        ]}],
-        text={"format": {"type": "json_schema", "name": "decision",
-                         "schema": _strict_schema(), "strict": True}},   # ※ text.format の形は公式で要確認
-    )
-    return Decision.model_validate_json(resp.output_text)
-```
-
-### 5.2 判断用プロンプトのテンプレート
-
-```
-あなたは卓上ロボット toio の「頭脳」です。俯瞰カメラの画像と現在の状態を見て、次の1手だけを決めます。
-
-# 画像について
-- 画像には番号付きの白い丸（候補地点）が描かれています。行き先は必ずこの番号で指定してください。
-- 画像の右がマットのX+、下がY+です。画像は左右反転していません。
-
-# 現在の状態（センサー値。画像より正確です）
-- toio A: x={x}, y={y}, 向き={angle}°
-- 直前の行動: {last_action} → 結果: {last_result}
-
-# タスク
-{instruction}
-
-# ルール
-- action は move_to_mark / rotate / stop / say から1つ選ぶ。
-- 目標が見えない・判断できないときは action="stop" とし、reasoning に理由を書く。
-- observation と reasoning は日本語で各1〜2文。
-- タスクが完了していれば done=true。
-```
-
----
-
-## 6. toio を Chrome から動かす（Web Bluetooth）
-
-### 6.1 前提条件
-
-- **HTTPS で配信する**（`localhost` は例外として可）。Vercel のURLならそのままでよい。
-- `navigator.bluetooth.requestDevice()` は**ボタンのクリックなど、ユーザー操作から**呼ぶ。
-- Chrome の対応環境:
-  - 使える: Windows 10以降、macOS、ChromeOS、Android
-  - Linux: フラグ（`#experimental-web-platform-features`）が必要な場合がある
-  - iPhone / iPad: 標準では不可（Bluefy などの専用ブラウザなら動くという報告あり）
-  - **審査に使うPCで事前に必ず動作確認する。**
-- 1回の `requestDevice` で接続できるのは1台。**2台なら2回呼ぶ**（「A接続」「B接続」のボタンを分ける）。
-- TypeScript では型定義が要る: `npm i -D @types/web-bluetooth`
-
-### 6.2 UUID（サービスは共通 `10b20100-5b3b-4571-9508-cf3efcd7bbae`）
-
-| 機能 | Characteristic UUID | 主な用途 |
-|---|---|---|
-| ID情報 | `10b20101-…` | Position ID（マット上の x, y, 角度）を通知で受け取る |
-| モーター | `10b20102-…` | 速度指定、時間指定、目標座標移動、複数目標の移動 |
-| ランプ | `10b20103-…` | LEDの色 |
-| サウンド | `10b20104-…` | 効果音、MIDI |
-| センサー | `10b20106-…` | 傾き・衝突・ダブルタップなど |
-| ボタン | `10b20107-…` | 上面ボタン |
-| バッテリー | `10b20108-…` | 残量 |
-| 設定 | `10b201ff-…` | 通知の設定など |
-
-（`…` 部分はすべて `-5b3b-4571-9508-cf3efcd7bbae`。Web Bluetooth では**小文字**で書く）
-
-### 6.3 最小コード（Next.js の Client Component から呼ぶ）
-
-```ts
-// lib/toio.ts
-const SUFFIX = "-5b3b-4571-9508-cf3efcd7bbae";
-const SERVICE = "10b20100" + SUFFIX;
-const ID = "10b20101" + SUFFIX, MOTOR = "10b20102" + SUFFIX, LIGHT = "10b20103" + SUFFIX;
-
-export type Pose = { x: number; y: number; angle: number } | null;
-
-export async function connectCube(onPose: (p: Pose) => void, onMoveResult?: (code: number) => void) {
-  const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE] }] });
-  const server = await device.gatt!.connect();
-  const svc = await server.getPrimaryService(SERVICE);
-  const motor = await svc.getCharacteristic(MOTOR);
-  const id = await svc.getCharacteristic(ID);
-  const light = await svc.getCharacteristic(LIGHT);
-
-  id.addEventListener("characteristicvaluechanged", (e) => {
-    const v = (e.target as BluetoothRemoteGATTCharacteristic).value!;
-    const t = v.getUint8(0);
-    if (t === 0x01) onPose({ x: v.getUint16(1, true), y: v.getUint16(3, true), angle: v.getUint16(5, true) });
-    else if (t === 0x03) onPose(null);               // マットから外れた（Position ID missed）
-  });
-  await id.startNotifications();
-
-  motor.addEventListener("characteristicvaluechanged", (e) => {
-    const v = (e.target as BluetoothRemoteGATTCharacteristic).value!;
-    if (v.getUint8(0) === 0x83 || v.getUint8(0) === 0x84) onMoveResult?.(v.getUint8(2)); // 0=成功 1=タイムアウト 2=ID見失い…
-  });
-  await motor.startNotifications();
-
-  return { device, motor, light };
-}
-
-/** 左右モーター（-115〜115。マイナスは後退）を durationMs だけ回す。8未満は停止扱い */
-export function motorBytes(left: number, right: number, durationMs = 0) {
-  const dir = (v: number) => (v >= 0 ? 1 : 2);
-  const spd = (v: number) => Math.min(115, Math.abs(Math.round(v)));
-  return new Uint8Array([0x02, 0x01, dir(left), spd(left), 0x02, dir(right), spd(right),
-                         Math.min(255, Math.round(durationMs / 10))]);
-}
-
-/** マット上の (x, y) へ移動（toio が自分で制御）。angleDeg 省略時は向きを指定しない */
-export function moveToBytes(x: number, y: number, opt: { id?: number; timeoutSec?: number; maxSpeed?: number; angleDeg?: number } = {}) {
-  const b = new DataView(new ArrayBuffer(13));
-  b.setUint8(0, 0x03); b.setUint8(1, opt.id ?? 0); b.setUint8(2, opt.timeoutSec ?? 5);
-  b.setUint8(3, 0);                       // 移動タイプ 0: 回転しながら移動
-  b.setUint8(4, opt.maxSpeed ?? 80);      // 10〜255
-  b.setUint8(5, 0);                       // 速度変化 0: 一定
-  b.setUint8(6, 0);
-  b.setUint16(7, x, true); b.setUint16(9, y, true);
-  const angle = opt.angleDeg === undefined ? (0x5 << 13)                 // 0x5: 角度を指定しない
-                                           : (0x0 << 13) | (opt.angleDeg & 0x1fff);
-  b.setUint16(11, angle, true);
-  return new Uint8Array(b.buffer);
-}
-
-/** LED（durationMs=0 で点灯し続ける）。仕様: https://toio.github.io/toio-spec/docs/ble_light */
-export function lightBytes(r: number, g: number, b: number, durationMs = 0) {
-  return new Uint8Array([0x03, Math.min(255, Math.round(durationMs / 10)), 0x01, 0x01, r, g, b]);
-}
-
-// 使い方: await cube.motor.writeValueWithoutResponse(moveToBytes(250, 250));
-```
-
-### 6.4 モーター制御の早見表（仕様より）
-
-| コマンド | 先頭バイト | 内容 |
-|---|---|---|
-| 速度指定 | `0x01` | 次の命令まで回り続ける |
-| 時間指定 | `0x02` | 最後のバイト×10ms だけ回る（0は無制限） |
-| **目標座標へ移動** | `0x03` | toio自身が制御して (x, y, 角度) へ移動。結果は通知 `0x83` で届く（0=成功, 1=タイムアウト, 2=ID見失い, 3=パラメータ不正…）。到達の判定基準は x, y が15以内かつ角度が4°以内 |
-| **複数目標の移動** | `0x04` | 最大29点を連続で移動。経路・図形を描くのに使う |
-| 加速度指定 | `0x05` | 並進速度、加速度、回転速度などを指定 |
-
-- 速度の値は **8〜115 の範囲で線形**（8未満は停止、115以上は一定）。
-- マット座標の範囲（Position ID）:
-
-| マット | X | Y |
-|---|---|---|
-| トイオ・コレクション（リング面） | 45–455 | 45–455 |
-| トイオ・コレクション（カラータイル面） | 545–955 | 45–455 |
-| 簡易プレイマット（コアキューブ単体に付属） | 98–402 | 142–358 |
-
-- 座標の向きは画像と同じく右がX+、下がY+と考えてよいが、**角度の0°方向と回る向きは実機で確認**すること。
-
-### 6.5 マットが無い場合
-
-- Position ID が使えないので、位置はカメラで推定する:
-  - toioの上に色シールや**ArUcoマーカー**を貼り、OpenCVで検出する（`cv2.aruco.ArucoDetector`、`opencv-contrib-python` が必要）。
-  - または色検出で位置を求める。
-- 移動は「時間指定（0x02）で短く動かす → 撮影 → 誤差を見て修正」を繰り返す。VLMは毎回呼ばず、**目標を決めるときだけ**呼ぶ。
-- 進む方向を決めるだけなら PIVOT型（3.4c）の矢印選択が使える。
-
-### 6.6 当日のハマりどころ
-
-- **電池:** 決勝前に満充電にする。低電圧で接続が不安定になる。
-- **切断への備え:** 「再接続」ボタンを用意し、`gattserverdisconnected` イベントで画面に表示する。
-- **マット外れ:** 通知 `0x03` が来たら UI で警告し、動作を止める。
-- **電波の混雑:** 会場は Bluetooth が混む。接続が切れてもデモが続けられるよう、手動操作のモードも用意する。
-
-参考実装: [p5.toio](https://github.com/tetunori/p5.toio)（p5.js＋Web Bluetooth）、[Zenn: スマホの傾きでtoioを動かす](https://zenn.dev/kaz399/articles/ce83d57f0e65a1)、[toio.js](https://github.com/toio/toio.js)（Node.js用）、[公式通信仕様](https://toio.github.io/toio-spec/)
-
----
-
-## 7. Next.js ＋ FastAPI の最小構成
-
-```
-app/                      # Next.js (App Router)
-  page.tsx                # カメラ表示、toio接続ボタン、判断結果のオーバーレイ
-  lib/toio.ts             # §6.3
-backend/                  # FastAPI
-  main.py                 # /decide
-  vlm.py schema.py marks.py
-```
-
-**backend/main.py**
-
-```python
-import base64, io
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from PIL import Image
-from marks import draw_marks
-from vlm import decide
-from schema import sanitize
-
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-class DecideReq(BaseModel):
-    image_b64: str                     # JPEG（data: の接頭辞なし）
-    instruction: str
-    marks: list[tuple[int, int]]       # 画像上の候補点（フロントで計算 or 固定の格子点）
-    pose: dict | None = None           # {"x":..,"y":..,"angle":..}
-    last: str = ""
-
-@app.post("/decide")
-def decide_api(req: DecideReq):
-    img = Image.open(io.BytesIO(base64.b64decode(req.image_b64))).convert("RGB")
-    marked = draw_marks(img, req.marks)
-    buf = io.BytesIO(); marked.save(buf, format="JPEG", quality=80)
-    marked_b64 = base64.b64encode(buf.getvalue()).decode()
-    prompt = PROMPT_TEMPLATE.format(instruction=req.instruction, last=req.last,
-                                    **(req.pose or {"x": "?", "y": "?", "angle": "?"}))
-    d = sanitize(decide(marked_b64, prompt), len(req.marks))
-    return {"decision": d.model_dump(), "marked_image": marked_b64}   # 印付き画像を返してデモ画面に表示
-```
-
-（`PROMPT_TEMPLATE` は §5.2 を `{x} {y} {angle} {instruction} {last}` の差し込み付きで定義する）
-
-**フロントで画像を取る（`page.tsx` の一部）**
-
-```ts
-async function captureJpegB64(video: HTMLVideoElement, width = 768) {
-  const c = document.createElement("canvas");
-  c.width = width; c.height = Math.round(video.videoHeight * width / video.videoWidth);
-  c.getContext("2d")!.drawImage(video, 0, 0, c.width, c.height);   // ミラー表示は CSS だけで行い、送る画像は反転しない
-  return c.toDataURL("image/jpeg", 0.75).split(",")[1];
-}
-// const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-```
-
-**デプロイ:**
-- フロントは Vercel（HTTPSになるので Web Bluetooth の条件を満たす）。
-- バックエンドは Vercel の Python 関数、Cloud Run、Render など。
-- 時間がなければ、ローカルの FastAPI を `cloudflared tunnel` などでHTTPS公開する方法もある。
-- APIキーはバックエンドの環境変数だけに置く。
-
----
-
-## 8. 3分デモで見せるコツ
-
-- **画面を3分割する:** ①カメラ映像（印付き）、②VLMの `observation / reasoning`（吹き出し風）、③行動ログ（タイムライン）。実物が動くのと同時に「AIがこう考えた」が見える。
-- **審査員に操作してもらう:** 指示を入力する、音声で話す、物を置き換える、など。ルールにも「審査員が実際に作品を使用」とある。
-- **15秒で分かる導入:** テーマとの関係を一言で伝える。
-- **失敗に備える:**
-  - 手動モードのボタン
-  - 録画のバックアップ
-  - 「判断できない」ときに止まる様子もあえて見せる（安全設計のアピールになる）
-- **質疑の想定:** 「なぜVLMを使うのか（ルールベースとの違い）」「遅延をどう扱ったか」に一言で答えられるようにする。
-
----
-
-## 9. 論文・資料リスト（ハッカソンで使えるところ）
+## 5. 論文リスト（ハッカソンで使えるところ）
 
 ### A. LLM/VLMにロボットの段取りを考えさせる（高レベル計画）
 
-| 論文 | 年 | 一言要約 | ハッカソンで使えるところ |
+| 論文 | 年 | 要約 | ハッカソンで使えるところ |
 |---|---|---|---|
-| [SayCan: Do As I Can, Not As I Say](https://arxiv.org/abs/2204.01691) | 2022 | LLMは「できること一覧」から選び、実行可能性の評価と掛け合わせる | **行動を選択肢にする（3.1）**の原点 |
-| [Inner Monologue](https://arxiv.org/abs/2207.05608) | 2022 | 成功検知や場面記述を言語でLLMに返し、閉ループで計画し直す | **閉ループ（3.5）**、履歴の渡し方 |
-| [Code as Policies](https://arxiv.org/abs/2209.07753) | 2022 | LLMがロボットAPIを呼ぶコードを書く | **命令列の生成（3.10）**、図形を描く動き |
-| [ProgPrompt](https://arxiv.org/abs/2209.11302) | 2022 | 使える行動と物体をプログラム風のプロンプトで与える | プロンプトの書き方 |
-| [ChatGPT for Robotics](https://arxiv.org/abs/2306.17582) | 2023 | LLMでロボットを動かす設計原則（API設計、人によるフィードバック） | 関数APIの設計 |
-| [VoxPoser](https://arxiv.org/abs/2307.05973) | 2023 | 言語から「行くべき場所／避ける場所」の3D価値マップを作り、軌道を最適化 | グリッドのコスト表の発想 |
-| [ViLa: Look Before You Leap](https://arxiv.org/abs/2311.17842) | 2023 | GPT-4Vで画像を見ながら段取りを立て、閉ループで更新 | VLMによる計画 |
+| [SayCan: Do As I Can, Not As I Say](https://arxiv.org/abs/2204.01691) | 2022 | ロボットが実行できるスキルの一覧（「スポンジを持つ」など）を用意し、LLM（PaLM）が「指示の達成にそのスキルが役立つか」を、強化学習で学んだ価値関数が「今の状況でそのスキルが成功しそうか」をそれぞれ採点する。2つを掛け合わせた点数が最も高いスキルを選んで実行し、これを繰り返して段取りを組む。実際のキッチンでの移動マニピュレータの実験で、101個の指示に対し計画の成功率84%、実行の成功率74%。LLMに行動を自由に作らせず、できることの中から選ばせるのが要点 | **行動を選択肢にする（3.1）**の原点 |
+| [Inner Monologue](https://arxiv.org/abs/2207.05608) | 2022 | LLMで段取りを立てるロボットに、環境からのフィードバックを言葉にして返す。成功したかどうかの判定、物体検出による場面の記述、人間への質問とその答えをプロンプトに書き足し、LLMはそれを読んで計画をやり直す（閉ループ）。追加の学習なしで、つかみ損ねなどの失敗からの回復や、途中で状況や指示が変わる場面に対応できた。シミュレーションと実機の机上の並べ替え、実際のキッチンでの移動マニピュレーションで検証した | **閉ループ（3.5）**、履歴の渡し方 |
+| [Code as Policies](https://arxiv.org/abs/2209.07753) | 2022 | LLM（Codex）に、自然言語の指示から、知覚API（物体の位置を取る）と制御API（つかむ・動かす）を呼ぶ Python コードを書かせる。numpy などで幾何の計算もでき、「もう少し左」「速く」のような曖昧な指示を数値に変えたり、ループや条件分岐でフィードバック制御を書いたりできる。未定義の関数があれば、それもLLMに再帰的に書かせる（階層的なコード生成）。図形を描く、机上の物の並べ替え、移動ロボットで実演した | **命令列の生成（3.10）**、図形を描く動き |
+| [ProgPrompt](https://arxiv.org/abs/2209.11302) | 2022 | LLMへのプロンプトを Python プログラムの形にする。使える行動を import 文で、環境にある物体をリストで並べ、タスクを関数として書いた例を見せると、LLMは新しいタスクの段取りを同じ形の関数として書く。行動の前提を assert で確かめ、満たしていなければ回復の行動を入れる（例: 冷蔵庫の近くにいなければ探しに行く）。家庭のシミュレータ VirtualHome と実機のロボットアームで、当時の手法より高い成功率を出した | プロンプトの書き方 |
+| [ChatGPT for Robotics](https://arxiv.org/abs/2306.17582) | 2023 | Microsoft による、ChatGPT でロボットを動かすための設計原則と事例集。①説明的な名前を付けた高レベルの関数ライブラリを用意し、②タスク・使える関数・制約をプロンプトで説明し、③生成されたコードを人がシミュレーションで確かめてフィードバックし、対話で直していく。ドローンの操縦、ロボットアームの操作、移動ロボットの探索などで、関数を適切に設計すればゼロショットでも多くのタスクを解けることを示した。プロンプト例を集めた PromptCraft も公開 | 関数APIの設計 |
+| [VoxPoser](https://arxiv.org/abs/2307.05973) | 2023 | LLMにコードを書かせ、そのコードがVLM（物体検出・セグメンテーション）を呼んで、3D空間のボクセル上に「行くべき場所」（アフォーダンス）と「避ける場所」（制約）の価値マップを作る。動作計画はこのマップの上で軌道を最適化して作る。「上の引き出しを開けて、花瓶に気をつけて」のような指示を追加の学習なしで実行でき、途中で物が動かされても閉ループで追従した | グリッドのコスト表の発想 |
+| [ViLa: Look Before You Leap](https://arxiv.org/abs/2311.17842) | 2023 | GPT-4V に画像と指示を直接与えて、段取りを1ステップずつ立てさせる。画像の情報をテキストに変換してからLLMに渡す方式（SayCan など）と違い、物の位置関係や状態（邪魔な物があるので先にどける、など）を常識と合わせて読み取れる。各ステップの後にもう一度画像を見て計画を更新する閉ループにする。実機とシミュレーションの操作タスクで、テキストに変換する方式を上回った | VLMによる計画 |
 
 ### B. 画像に描き込む／指させる（Visual Prompting・Grounding）
 
-| 論文 | 年 | 一言要約 | ハッカソンで使えるところ |
+| 論文 | 年 | 要約 | ハッカソンで使えるところ |
 |---|---|---|---|
-| [Set-of-Mark (SoM)](https://arxiv.org/abs/2310.11441) | 2023 | 領域に番号を振るとGPT-4Vの位置特定が大きく改善 | **番号を選ばせる（3.4a）** |
-| [SCAFFOLD](https://arxiv.org/abs/2402.12058) | 2024 | 座標付きのドット格子を重ねると視覚と言語の対応がとりやすい | **グリッド重畳（3.4b）** |
-| [PIVOT](https://arxiv.org/abs/2402.07872) | 2024 | 候補の矢印を描いて選ばせ、反復して絞り込む | **方向の決定（3.4c）** |
-| [MOKA](https://arxiv.org/abs/2403.03174) | 2024 | 候補キーポイントに印を付けてVLMに選ばせ、操作に変換 | 触れる点の選択（3.4d） |
-| [RoboPoint](https://arxiv.org/abs/2406.10721) | 2024 | 空間アフォーダンス（置ける場所など）を点で答えるVLM | 「点で答えさせる」設計 |
-| [Molmo](https://arxiv.org/abs/2409.17146) | 2024 | 画像上を点で指すことを学習したオープンVLM | pointing の考え方 |
-| [SpatialVLM](https://arxiv.org/abs/2401.12168) | 2024 | 空間推論データでVLMの距離・位置関係の理解を強化 | VLMの空間推論の限界を知る |
-| [ReKep](https://arxiv.org/abs/2409.01652) | 2024 | キーポイント間の制約をVLMにコードとして書かせて操作 | キーポイント＋コード生成 |
+| [Set-of-Mark (SoM)](https://arxiv.org/abs/2310.11441) | 2023 | 既存のセグメンテーションモデル（SAM など）で画像を領域に分け、各領域に番号・枠・マスクの印を描き込んでから GPT-4V に渡す。GPT-4V は「3番」のように印で領域を指せるようになり、位置を答える問題の精度が大きく上がった。参照表現の理解（RefCOCOg）では、ゼロショットで、専用に学習した当時の最先端モデルを上回った。印どうしが重ならないように置く工夫も示している | **番号を選ばせる（3.4a）** |
+| [SCAFFOLD](https://arxiv.org/abs/2402.12058) | 2024 | 画像に一定間隔のドットの格子を重ね、各ドットに [行, 列] の座標ラベルを付ける。プロンプトでもこの座標で位置を参照させると、画像の場所と言葉の対応がとりやすくなる。GPT-4V などで、空間推論、細かい部分の理解、複数の物の比較などのタスクの成績が、何も描かない場合や他の描き込み方式より上がった。CoT と組み合わせても効果がある | **グリッド重畳（3.4b）** |
+| [PIVOT](https://arxiv.org/abs/2402.07872) | 2024 | 動作の候補（移動方向の矢印、つかむ位置の点など）をランダムに生成して番号付きで画像に描き、VLMに良いものを選ばせる。選ばれた候補の周りから候補を出し直し、これを繰り返して絞り込む（反復的な最適化）。ロボットのデータで学習せず、ゼロショットで実機の移動、物の操作、空間の推論を行えた。精度はまだ十分ではないが、VLMに連続値を直接答えさせずに済む | **方向の決定（3.4c）** |
+| [MOKA](https://arxiv.org/abs/2403.03174) | 2024 | 動作の生成を「画像のどの印を選ぶか」という質問に変える。物体の輪郭から候補のキーポイントを、作業空間にはグリッドを描き、GPT-4V にまず段取りをサブタスクに分けさせ、各サブタスクで「どこをつかむか」「どの部分を当てるか」「どこへ動かすか」「経由点」を印から選ばせる。選んだ点をロボットの動きに変換する。道具を使う、柔らかい物を扱う、物を並べ替えるなど、自由な言葉の指示を学習なしでこなし、集めたデータで方策を学習させることもできた | 触れる点の選択（3.4d） |
+| [RoboPoint](https://arxiv.org/abs/2406.10721) | 2024 | 「コップの左の空いている所」「棚の空いている段」のような言葉の指示に対し、条件を満たす場所を画像上の点の集合で答えるように VLM を追加学習した。学習データは3Dシーンを自動生成してレンダリングする方法で大量に作り、実世界のデータを集めずに済ませた。GPT-4o などの汎用VLMより、置き場所や空き領域を当てる精度と、それを使ったロボットのタスク成功率がともに高かった。ロボットの操作、移動、ARに使える | 「点で答えさせる」設計 |
+| [Molmo](https://arxiv.org/abs/2409.17146) | 2024 | Ai2 の、重みも学習データも公開されたVLM。人が画像を声で詳しく説明したキャプションと、画像上の物を点で指すデータ（PixMo-Points）で学習しており、「〜はどこ？」に点の座標で答えられる。数を数えるときも1つずつ点を打ってから数えるので正確になる。最大の 72B モデルは公開モデルの中で最高水準で、当時の GPT-4o などの商用モデルとも競える成績だった | pointing の考え方 |
+| [SpatialVLM](https://arxiv.org/abs/2401.12168) | 2024 | VLMが「どちらが近いか」「何メートル離れているか」に弱いのは、学習データに3Dの空間知識が少ないからだと考えた。インターネットの画像から深度推定とセグメンテーションで3Dの点群を復元し、空間についての質問と答えを自動生成した（1000万枚の画像から20億件）。これで学習したVLMは、位置関係の質問にも距離の数値の質問にも強くなり、CoT と組み合わせた多段の空間推論や、ロボットの報酬の付与にも使えた | VLMの空間推論の限界を知る |
+| [ReKep](https://arxiv.org/abs/2409.01652) | 2024 | タスクを「3Dのキーポイント同士の関係の制約」として Python 関数で表す（例: 急須の注ぎ口がカップの口の真上にある）。候補のキーポイントは視覚の基盤モデル（DINOv2、SAM）で出して番号を描き、GPT-4o にそれを見ながら制約の関数を書かせる。制約を満たすロボットの姿勢を最適化で約10Hzで解くので、途中で物を動かされても追従できる。追加の学習なしで、多段階のタスクや両腕の操作をこなした | キーポイント＋コード生成 |
 
 ### C. 推論・失敗の検知と検証
 
-| 論文 | 年 | 一言要約 | ハッカソンで使えるところ |
+| 論文 | 年 | 要約 | ハッカソンで使えるところ |
 |---|---|---|---|
-| [ECoT: Embodied Chain-of-Thought](https://arxiv.org/abs/2407.08693) | 2024 | 行動の前にサブタスクや物体位置を推論させると汎化が向上 | **reasoning → action の順（3.6）** |
-| [REFLECT](https://arxiv.org/abs/2306.15724) | 2023 | ロボットの失敗をLLMに説明させ、修正計画を立てる | 失敗時のリトライ文言 |
-| [AHA](https://arxiv.org/abs/2410.00371) | 2024 | 操作の失敗を検知・説明するVLM | **判定を別の呼び出しにする（3.5）** |
-| [Self-Consistency](https://arxiv.org/abs/2203.11171) | 2022 | 複数サンプルの多数決で精度向上 | **並列3回の多数決（3.8）** |
+| [ECoT: Embodied Chain-of-Thought](https://arxiv.org/abs/2407.08693) | 2024 | VLA（OpenVLA）を、行動を出す前に推論を言葉で書くように学習させる。推論の中身は、タスクの計画、今のサブタスク、動きの方向（「左へ」など）、グリッパーの位置、関係する物体のバウンディングボックス。この推論データは既存のモデル（VLM、物体検出、LLM）で自動生成した。ロボットのデータを増やさずに、難しい汎化タスクでの成功率が28ポイント上がった。推論が読めるので、人が言葉で誤りを直すこともできる | **reasoning → action の順（3.6）** |
+| [REFLECT](https://arxiv.org/abs/2306.15724) | 2023 | ロボットの失敗を説明し、直すための枠組み。カメラ・深度・音・ロボットの状態から場面のグラフを作り、重要な出来事だけを階層的にテキストへ要約する。LLM はこの要約を読み、まず各サブゴールを達成できたかを確かめ、次に計画全体を見て、何が原因で失敗したかを説明する。その説明をもとに、作業を最後までやり遂げるための修正した計画を立てる。失敗の事例を集めたデータセット RoboFail も作った | 失敗時のリトライ文言 |
+| [AHA](https://arxiv.org/abs/2410.00371) | 2024 | ロボット操作の失敗を検出し、何が悪かったかを言葉で説明するように VLM を追加学習した。シミュレーションの成功例に、つかみ損ね・ずれ・すべり落ちなどの乱れをわざと加えて失敗例を自動生成し、学習データにした。失敗の検出と説明で GPT-4o などの汎用VLMを上回り、報酬関数の改善、計画の修正、サブタスクの成否の確認に使うと、ロボットのタスク成功率が上がった | **判定を別の呼び出しにする（3.5）** |
+| [Self-Consistency](https://arxiv.org/abs/2203.11171) | 2022 | CoT の推論を1本だけ出すのではなく、サンプリングで異なる推論を複数出し、最終的な答えを多数決で決める。追加の学習なしで CoT の正答率をさらに上げられる（算数の GSM8K で +17.9 ポイント）。呼び出し回数のぶんコストは増える | **並列3回の多数決（3.8）** |
 
 ### D. VLMの弱点を知る
 
 | 論文 | 年 | 分かること |
 |---|---|---|
-| [Eyes Wide Shut?](https://arxiv.org/abs/2401.06209) | 2024 | 向き・数・位置など、単純な視覚パターンをVLMが取り違える |
-| [Vision Language Models Are Blind](https://arxiv.org/abs/2407.06581) | 2024 | 線の交差や円の重なりといった低レベルの視覚判定が苦手 |
-| [BLINK](https://arxiv.org/abs/2404.12390) | 2024 | 人間なら一瞬で分かる知覚タスク（奥行き、対応点など）で大きく劣る |
-| [Thinking in Space (VSI-Bench)](https://arxiv.org/abs/2412.14171) | 2024 | 空間の記憶や推論がまだ弱く、認知マップを作らせると改善する |
+| [Eyes Wide Shut?](https://arxiv.org/abs/2401.06209) | 2024 | 多くのVLMが画像の読み取りに使う CLIP は、見た目がはっきり違う2枚の画像をほぼ同じものとして扱うことがある（CLIP-blind ペア）。そうしたペアから、向き・数・位置・色・視点など9種類の単純な視覚パターンを問う MMVP ベンチマークを作ると、人なら簡単に答えられる質問で GPT-4V を含む最先端のVLMが大きく間違え、多くのモデルは当て推量と同程度以下だった。原因は画像エンコーダにあるとして、CLIP と自己教師あり学習の DINOv2 の特徴を混ぜると改善することを示した |
+| [Vision Language Models Are Blind](https://arxiv.org/abs/2407.06581) | 2024 | 人なら一目で分かる7つの課題（2本の折れ線が何回交わるか、2つの円が重なっているか、どの文字に丸が付いているか、重なった図形の数、入れ子の四角の数、表の行と列の数、色の付いた路線をたどる）で、GPT-4o、Gemini 1.5 Pro、Claude 3.5 Sonnet などの正答率は平均で約6割にとどまった。VLMは細かい部分がぼやけて見えている（近視のような）状態で、重なりや交差のような低レベルの幾何の判定が苦手 |
+| [BLINK](https://arxiv.org/abs/2404.12390) | 2024 | 相対的な奥行き、別の視点の画像との対応点、物の位置関係、数える、ジグソーパズル、画像の加工の検出など、人なら一瞬で分かる14種類の知覚タスクを多肢選択の問題（3,807問）にした。人の平均正答率は約96%だが、GPT-4V や Gemini は約50%で、当て推量より10ポイント余り高いだけだった。こうした知覚は、専用の画像処理モデルのほうがはるかに得意 |
+| [Thinking in Space (VSI-Bench)](https://arxiv.org/abs/2412.14171) | 2024 | 室内を歩きながら撮った動画（288本）から、物の数、距離、大きさ、部屋の広さ、相対的な方向、経路の計画、物が出てきた順番などを問う5,000問以上のベンチマーク VSI-Bench を作った。マルチモーダルLLMは人より大きく劣り、主な弱点は見ることや言葉ではなく空間の推論そのものだった。CoT などの言葉による推論の工夫は効かないか、かえって悪化した。一方、物の配置を格子上の地図（認知マップ）として書き出させると、距離の判断が改善した |
 
 ### E. VLMに道具（コード・切り出し）を使わせる
 
-| 論文 | 年 | 一言要約 |
+| 論文 | 年 | 要約 |
 |---|---|---|
-| [VisProg](https://arxiv.org/abs/2211.11559) / [ViperGPT](https://arxiv.org/abs/2303.08128) | 2022/2023 | 視覚の質問をLLMがプログラムに分解して解く |
-| [V*: Guided Visual Search](https://arxiv.org/abs/2312.14135) | 2023 | 必要な部分を探して拡大する（3.9 の根拠） |
-| [Visual Sketchpad](https://arxiv.org/abs/2406.09403) | 2024 | VLMが自分で補助線・切り出し・描き込みをして推論する |
+| [VisProg](https://arxiv.org/abs/2211.11559) / [ViperGPT](https://arxiv.org/abs/2303.08128) | 2022/2023 | 視覚の質問や指示を、LLMがプログラムに分解して解く2つの研究。VisProg は GPT-3 に、物体検出・切り出し・画像編集などのモジュールを組み合わせる手順を書かせて実行し、画像についての推論、知識を使ったタグ付け、言葉による画像編集をこなした。ViperGPT は Codex に、find（物体を探す）や compute_depth（奥行きを測る）などの関数を使う Python コードを書かせ、追加の学習なしで複数の視覚質問応答のベンチマークで当時の最高水準を出した。どちらも途中の処理が読めるので、どこで間違えたかが分かる |
+| [V*: Guided Visual Search](https://arxiv.org/abs/2312.14135) | 2023 | 高解像度で物が多い画像では、答えに必要な部分が小さく、VLMの低い入力解像度では見えない。V* は、LLMの常識（「コップは机の上にありそう」など）を手がかりに、画像を区切って拡大しながら目的の物を探す。見つけた物を作業メモリに入れてから答える SEAL という構成を提案し、小さな部分を問う高解像度画像のベンチマーク V*Bench で GPT-4V などの汎用VLMを大きく上回った |
+| [Visual Sketchpad](https://arxiv.org/abs/2406.09403) | 2024 | VLMに「スケッチパッド」を持たせ、補助線・枠・印を描くコードを書かせたり、物体検出・セグメンテーション・深度推定などの専用モデルを呼ばせたりして、その結果の画像を見ながら推論を進めさせる。幾何・関数のグラフ・チェスなどの数学の課題で平均12.7ポイント、V*Bench や BLINK などの視覚の課題で平均8.6ポイント、GPT-4o の成績が上がった。人が図に書き込みながら考えるのと同じことをVLMにさせる |
 
-### F. VLA・ロボット基盤モデル（動向の把握用。ハッカソンで直接は使わない）
+---
 
-| 論文・発表 | 年 | 一言要約 |
-|---|---|---|
-| [RT-2](https://arxiv.org/abs/2307.15818) | 2023 | VLMに行動をトークンとして出力させる VLA の始まり |
-| [OpenVLA](https://arxiv.org/abs/2406.09246) | 2024 | オープンな7BのVLA |
-| [π0](https://arxiv.org/abs/2410.24164) / [π0.5](https://arxiv.org/abs/2504.16054) | 2024/2025 | flow matching で連続的な行動を生成。π0.5 は開かれた環境への汎化 |
-| [Gemini Robotics](https://arxiv.org/abs/2503.20020) | 2025 | Gemini 2.0 ベースの VLA と、空間推論の ER モデル |
-| [Gemini Robotics 1.5](https://arxiv.org/abs/2510.03342) | 2025 | ER 1.5 が段取りを決め、VLA が実行する分業。VLA も行動の前に「考える」 |
-| [GR00T N1](https://arxiv.org/abs/2503.14734) | 2025 | ヒューマノイド向け。遅いVLM（System 2）と速い行動生成（System 1）の二重構造 |
-| 2026年の動き | 2026 | Physical Intelligence が **π0.7**（4月、複数スキルの組み合わせによる汎化をうたう）を発表。Google DeepMind が **Gemini Robotics 2 / ER 2**（7月30日、ER 2 は Gemini API で公開）を発表 |
-
-### G. 公式ドキュメント（当日すぐ引く用）
+## 付録. 公式ドキュメント（当日すぐ引く用）
 
 - Gemini Robotics-ER: https://ai.google.dev/gemini-api/docs/robotics-overview
 - Gemini 画像理解（ボックス・セグメンテーション）: https://ai.google.dev/gemini-api/docs/image-understanding
@@ -696,6 +342,4 @@ async function captureJpegB64(video: HTMLVideoElement, width = 768) {
 - Claude 構造化出力: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
 - OpenAI 画像入力: https://developers.openai.com/api/docs/guides/images-vision
 - OpenAI モデル一覧: https://developers.openai.com/api/docs/models
-- toio 通信仕様: https://toio.github.io/toio-spec/ （モーター: `/docs/ble_motor`、ID: `/docs/ble_id`、マット座標: `/docs/hardware_position_id`）
-- Web Bluetooth（Chrome）: https://developer.chrome.com/docs/capabilities/bluetooth
 - MediaPipe（ブラウザで手・ポーズ・物体を検出）: https://ai.google.dev/edge/mediapipe/solutions/guide
