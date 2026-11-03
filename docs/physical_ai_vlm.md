@@ -1,23 +1,14 @@
 # Physical AI × VLM 実戦ガイド — VLMに「狙い通りに」動いてもらう手法
 
-> 対象: 全日本AIハッカソン 2026 決勝（2026-11-07 土, 11:30–14:30, 2人チーム, ベルサール渋谷ファースト）
-> 調査日: 2026-11-02。モデルIDやSDKの書き方は変わりやすいので、実装前に付録の公式ドキュメントで最終確認すること。
+> 共通事項（決勝ルール、構造化出力、安全装置、APIキー、モデル・APIのメモ）: `common.md`
 >
-> **コーディングエージェントへ:** この資料は「カメラ画像などを見たVLMの判断で、実物（toio等）や画面内のものを狙い通りに動かす」ための設計指針とコード断片です。コード断片はそのまま使ってよいが、APIキーは必ずバックエンド側だけで扱い、フロントに置かないこと。
+> **コーディングエージェントへ:** 先に `common.md` を読むこと。この資料は「カメラ画像などを見たVLMの判断で、実物（toio等）や画面内のものを狙い通りに動かす」ための設計指針とコード断片です。コード断片はそのまま使ってよい。
 
 ---
 
-## 0. 前提 — 決勝ルールとこの資料の範囲
+## 0. 前提 — この資料の範囲
 
-| 項目 | 内容 | 出典 |
-|---|---|---|
-| 作品 | **Webブラウザ（Google Chrome）から体験できる作品**。終了後にURLを提出 | レギュレーションPDF |
-| 審査 | 審査員が実際に作品を使う。1チーム**3分**（質疑込み） | 同上 |
-| 審査基準 | ①テーマに沿っているか（事前の作り込みは評価しない） ②実装度（動くこと重視、アイデアのみは評価しない） ③チャレンジ精神 ④AI活用度 | 同上 |
-| 機材 | ノートPC 1人1台、スマホ・タブレットは台数無制限。AIサービスは各自契約のもの | 同上 |
-| テーマ | ハッカソン開始時に発表 | 同上 |
-| 前例 | 予選5th（2026-07-25 東京）で各チームに **toio 2台** を配布。テーマは『夏×toio』『Radical Atoms×円×toio』『友×toio』。審査員はtoio開発者 | [公式レポート](https://www.aifestival.jp/news/japanaihack2026-05) |
-| 決勝のハード | **未発表**。toio か別のハードが出る可能性に備える | — |
+決勝ルール、審査基準、予選での toio の配布状況は `common.md` §1。
 
 この資料の範囲: VLM（画像を理解するLLM）を「頭」にして、物理的なもの（主にtoio）を思い通りに動かすための手法。VLA（ロボット制御そのものを学習したモデル）は扱わない。
 
@@ -74,12 +65,7 @@
 
 ### 3.2 構造化出力 ＋ サーバ側の検証
 
-- スキーマは**フラット**にし、`enum` と整数を使う。「なし」は `-1` のような番兵値で表す。`oneOf` やnull許容の型は各社で対応に差があるので避けると移植しやすい。
-- 受け取ったら Pydantic で再検証する。範囲外の値は丸め（clamp）、失敗したら1回だけ再試行し、だめなら `stop` にする。
-- 各社の指定方法:
-  - Claude: `output_config={"format": {"type": "json_schema", "schema": ...}}`
-  - Gemini: `response_format={"type": "text", "mime_type": "application/json", "schema": ...}`（Interactions API）
-  - OpenAI: `text={"format": {"type": "json_schema", ...}}`（Responses API）
+スキーマの書き方、検証の流れ、各社の指定方法は `common.md` §2。行動を選ばせるなら、次のようなスキーマにし、検証に失敗したら `stop` にする。
 
 ```python
 # schema.py — 3社共通で使える「フラットな」行動スキーマ
@@ -198,8 +184,8 @@ for step in range(MAX_STEPS):          # 例: 6
     history.append((decision, verdict))
 ```
 
-- **成功判定は行動決定とは別の呼び出しにする。** 同じ呼び出しで判定させると自己評価が甘くなる。判定用のプロンプトは「達成した／まだ／分からない ＋ 理由」の3択にする。
-- **止まる条件を必ず入れる:** 最大ステップ数、全体のタイムアウト、同じ行動が3回続いたら停止。
+- **成功判定は行動決定とは別の呼び出しにする**（`common.md` §5）。判定用のプロンプトは「達成した／まだ／分からない ＋ 理由」の3択にする。
+- **止まる条件を必ず入れる**（`common.md` §3）。
 - **履歴は短く渡す:** 直前2〜3手の「行動 → 結果」をテキストで渡す（Inner Monologue型）。
 - **元ネタ:** Inner Monologue（成功検知の結果を言語で返す）、REFLECT（失敗を説明させて修正）、AHA（失敗検知に特化したVLM）。
 
@@ -207,7 +193,7 @@ for step in range(MAX_STEPS):          # 例: 6
 
 - JSONのフィールド順を `observation → reasoning → action` にする。モデルは前から順に生成するので、理由を書いてから行動を選ぶことになる。
 - ECoT（Embodied Chain-of-Thought）では、行動の前にサブタスクや物体位置を明示して推論させると汎化性能が上がった。
-- ただし推論が長いと遅くなる。`reasoning` は「1〜2文」と指定し、モデル側の思考量の設定は低めにする（Claudeは `effort: "low"`、Geminiは `thinking_level` を low〜minimal）。
+- ただし推論が長いと遅くなる。`reasoning` は「1〜2文」と指定し、モデル側の思考量の設定は低めにする（`common.md` §5）。
 - 副産物として、`reasoning` をそのままデモ画面の吹き出しに出せる。
 
 ### 3.7 分かっていることはテキストで渡す
@@ -249,9 +235,8 @@ for step in range(MAX_STEPS):          # 例: 6
 - **画像を軽くする:** 長辺512〜768px、JPEG品質0.7程度。変化があったときだけ送る。必要な範囲だけ切り出して送る。
 - **モデルを役割で分ける:** 軽いモデル（Flash-Lite、Haiku、luna など）は判定や分類、重いモデルは計画、と分担する。
 - **ストリーミングAPIを使う:**
-  - Gemini Live（`gemini-3.8-live`）
+  - 汎用のリアルタイムAPI（Gemini Live、OpenAI Realtime）: `common.md` §5
   - `gemini-robotics-er-2-streaming-preview`（Live API経由。関数呼び出しは使えるが、構造化出力とコード実行は使えない）
-  - OpenAI Realtime（`gpt-realtime-2.1` など）
 
   「声で指示するとロボットが動く」はデモ映えする。
 - **速い認識はローカルで:**
@@ -274,7 +259,7 @@ for step in range(MAX_STEPS):          # 例: 6
 | 幻覚 | 無い物を「ある」と言う | 「見えない（not_found）」の選択肢を用意する | Gemini Robotics-ER ドキュメント |
 | 遅延 | 1回に数秒かかる | 二層構造、並列化、小さいモデル | — |
 
-**カメラの置き方:** 真上からの固定撮影が最強。スマホをスタンドで真上に固定し、同じWebページをスマホのChromeで開いて「撮影・送信係」にする。`getUserMedia` はHTTPSが必要。iPhoneのSafariでもカメラは使える。
+**カメラの置き方:** 真上からの固定撮影が最強。スマホをスタンドで真上に固定し、同じWebページをスマホのChromeで開いて「撮影・送信係」にする。カメラには HTTPS が必要（`common.md` §5）。iPhoneのSafariでもカメラは使える。
 
 ---
 
@@ -312,7 +297,6 @@ for step in range(MAX_STEPS):          # 例: 6
 | [ECoT: Embodied Chain-of-Thought](https://arxiv.org/abs/2407.08693) | 2024 | VLA（OpenVLA）を、行動を出す前に推論を言葉で書くように学習させる。推論の中身は、タスクの計画、今のサブタスク、動きの方向（「左へ」など）、グリッパーの位置、関係する物体のバウンディングボックス。この推論データは既存のモデル（VLM、物体検出、LLM）で自動生成した。ロボットのデータを増やさずに、難しい汎化タスクでの成功率が28ポイント上がった。推論が読めるので、人が言葉で誤りを直すこともできる | **reasoning → action の順（3.6）** |
 | [REFLECT](https://arxiv.org/abs/2306.15724) | 2023 | ロボットの失敗を説明し、直すための枠組み。カメラ・深度・音・ロボットの状態から場面のグラフを作り、重要な出来事だけを階層的にテキストへ要約する。LLM はこの要約を読み、まず各サブゴールを達成できたかを確かめ、次に計画全体を見て、何が原因で失敗したかを説明する。その説明をもとに、作業を最後までやり遂げるための修正した計画を立てる。失敗の事例を集めたデータセット RoboFail も作った | 失敗時のリトライ文言 |
 | [AHA](https://arxiv.org/abs/2410.00371) | 2024 | ロボット操作の失敗を検出し、何が悪かったかを言葉で説明するように VLM を追加学習した。シミュレーションの成功例に、つかみ損ね・ずれ・すべり落ちなどの乱れをわざと加えて失敗例を自動生成し、学習データにした。失敗の検出と説明で GPT-4o などの汎用VLMを上回り、報酬関数の改善、計画の修正、サブタスクの成否の確認に使うと、ロボットのタスク成功率が上がった | **判定を別の呼び出しにする（3.5）** |
-| [Self-Consistency](https://arxiv.org/abs/2203.11171) | 2022 | CoT の推論を1本だけ出すのではなく、サンプリングで異なる推論を複数出し、最終的な答えを多数決で決める。追加の学習なしで CoT の正答率をさらに上げられる（算数の GSM8K で +17.9 ポイント）。呼び出し回数のぶんコストは増える | **並列3回の多数決（3.8）** |
 
 ### D. VLMの弱点を知る
 
@@ -337,9 +321,6 @@ for step in range(MAX_STEPS):          # 例: 6
 
 - Gemini Robotics-ER: https://ai.google.dev/gemini-api/docs/robotics-overview
 - Gemini 画像理解（ボックス・セグメンテーション）: https://ai.google.dev/gemini-api/docs/image-understanding
-- Gemini モデル一覧: https://ai.google.dev/gemini-api/docs/models
 - Claude Vision: https://platform.claude.com/docs/en/build-with-claude/vision
-- Claude 構造化出力: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
 - OpenAI 画像入力: https://developers.openai.com/api/docs/guides/images-vision
-- OpenAI モデル一覧: https://developers.openai.com/api/docs/models
 - MediaPipe（ブラウザで手・ポーズ・物体を検出）: https://ai.google.dev/edge/mediapipe/solutions/guide

@@ -1,24 +1,22 @@
 # AI Agent 実戦ガイド — 作品に組み込むエージェントの設計
 
-> 対象: 全日本AIハッカソン 2026 決勝（2026-11-07 土, 11:30–14:30, 2人チーム）
-> 調査日: 2026-11-02。モデルIDやSDKは変わりやすいので、実装前に公式ドキュメントで確認すること。
+> 共通事項（決勝ルール、構造化出力、安全装置、APIキー、モデル・APIのメモ）: `common.md`
 > 関連: `physical_ai_vlm.md`（VLMで実物を狙い通りに動かす手法）
 >
-> **コーディングエージェントへ:** Part A は作品に組み込むエージェントの設計指針とコード、Part B は論文リスト、付録は実務ガイドと公式ドキュメントへのリンク。構成は Next.js（フロント）＋ FastAPI（Python バックエンド）。APIキーはバックエンドの環境変数にだけ置く。
+> **コーディングエージェントへ:** 先に `common.md` を読むこと。Part A は作品に組み込むエージェントの設計指針とコード、Part B は論文リスト、付録は実務ガイドと公式ドキュメントへのリンク。構成は Next.js（フロント）＋ FastAPI（Python バックエンド）。
 
 ---
 
 ## 0. 前提 — 審査基準とエージェントの関係
 
-- 作品は Chrome から体験できるもの。URLを提出し、審査員が実際に使う。審査は1チーム3分（質疑込み）。
-- 審査基準と、エージェント設計で効くところ:
+決勝ルールと審査基準は `common.md` §1。審査基準ごとに、エージェント設計で効くこと:
 
-| 審査基準 | ルールの補足 | エージェント設計で効くこと |
-|---|---|---|
-| テーマ適合 | 事前の作り込みは評価せず、その場で作ったものを評価 | 汎用の雛形は事前に用意し、**テーマに依存する部分（プロンプト、ツール、UI）は当日作る** |
-| 実装度 | 動くこと重視。アイデアだけは評価しない | **単純な構成で確実に動かす**。エージェントにしすぎない |
-| チャレンジ精神 | 独創的な解決、「ハッカー魂」 | 意外な入出力（実物、音声、カメラ、センサー）や、意外な役割分担 |
-| AI活用度 | AIをどれだけ活用しているか | **AIが何をしているかを画面で見せる**（ツール呼び出しの経過、判断理由、自己評価） |
+| 審査基準 | エージェント設計で効くこと |
+|---|---|
+| テーマ適合 | 汎用の雛形は事前に用意し、**テーマに依存する部分（プロンプト、ツール、UI）は当日作る** |
+| 実装度 | **単純な構成で確実に動かす**。エージェントにしすぎない |
+| チャレンジ精神 | 意外な入出力（実物、音声、カメラ、センサー）や、意外な役割分担 |
+| AI活用度 | **AIが何をしているかを画面で見せる**（ツール呼び出しの経過、判断理由、自己評価） |
 
 ---
 
@@ -132,10 +130,7 @@ def run_agent_events(user_text: str, max_steps: int = 8, time_limit_s: float = 6
     yield {"type": "error", "text": "ステップ上限に達しました"}
 ```
 
-> Claude API の注意（2026-11時点）:
-> - Opus 5.5 は思考を無効にできない。速さは `effort`（low〜max）で調整する。
-> - `tool_choice` で特定ツールを強制（`any` / `tool`）すると 400 エラーになる。`auto` のままプロンプトで誘導する。
-> - `temperature` などのサンプリング引数は送らない。
+> Claude API の注意（`effort`、`tool_choice`、サンプリング引数）は `common.md` §5。
 >
 > 他の手段: マルチプロバイダ対応の Python ライブラリ [PydanticAI](https://ai.pydantic.dev) / [LiteLLM](https://docs.litellm.ai)、TypeScript なら [Vercel AI SDK](https://ai-sdk.dev)、OpenAI なら [Agents SDK](https://openai.github.io/openai-agents-python/)。
 
@@ -158,8 +153,7 @@ def run_agent_events(user_text: str, max_steps: int = 8, time_limit_s: float = 6
 ## A5. 構造化出力で UI とつなぐ
 
 - LLMが返すJSONを、そのままUIの部品に対応させる（簡易な Generative UI）。例: `{"cards":[{"title":..,"emoji":..,"score":..}], "next_question": ..}` を受け取り、React でカードとして描画する。
-- 各社の指定方法: Claude は `output_config.format`、Gemini は `response_format`、OpenAI は `text.format`（`physical_ai_vlm.md` §3.2）。
-- スキーマはフラットに、enum を使う。「なし」は番兵値（`-1` や空文字）で表す。
+- スキーマの書き方と各社の指定方法は `common.md` §2。
 
 ## A6. 生成 → 評価 → 改善（Evaluator-Optimizer / LLM-as-a-Judge）
 
@@ -172,23 +166,16 @@ for i in range(3):
     draft = improve(draft, review)
 ```
 
-- **評価は別の呼び出し・別のプロンプト**にする（生成役に自己採点させると甘くなる）。基準（rubric）は3〜5項目で具体的に書く。
+- **評価は別の呼び出し・別のプロンプト**にする（`common.md` §5）。基準（rubric）は3〜5項目で具体的に書く。
 - 元ネタ: Self-Refine、Reflexion、LLM-as-a-Judge（MT-Bench の論文）。
 - デモでは「1回目 4点 → 2回目 7点 → 3回目 9点」と点数が上がっていく様子が分かりやすい。
 
 ## A7. 音声・リアルタイム
 
-- 音声で双方向に対話するなら、各社のリアルタイムAPIを使う: Gemini Live（`gemini-3.8-live`）、OpenAI Realtime（`gpt-realtime-2.1` など）、`gpt-live-1`。
+- 音声で双方向に対話するなら、各社のリアルタイムAPIを使う（モデルIDは `common.md` §5）。
 - 割り込み、遅延、マイクの権限（HTTPS が必須）でハマりやすい。時間がなければ、**ブラウザで録音→文字起こし→LLM→読み上げ**の直列構成のほうが確実。
 
-## A8. 安全装置（デモを止めないために）
-
-- ステップの上限、全体のタイムアウト、同じツール・同じ引数が3回続いたら停止する。
-- APIエラーやレート制限のときに表示する文言と、**ダミー応答で動き続けるデモモード**（環境変数で切り替え）を用意する。
-- 実機を動かす操作は範囲内に丸め、緊急停止ボタンを付ける。
-- API料金: 会期中だけ使うキーを作り、上限を設定しておく。
-
-## A9. FastAPI → Next.js へのストリーミング（SSE）
+## A8. FastAPI → Next.js へのストリーミング（SSE）
 
 ```python
 # backend/main.py（抜粋）
@@ -229,7 +216,7 @@ export async function runAgent(text: string, onEvent: (ev: any) => void) {
 }
 ```
 
-（`NEXT_PUBLIC_API_BASE` はバックエンドのURLなので公開してよい。**APIキーは絶対に `NEXT_PUBLIC_` に入れない**）
+（`NEXT_PUBLIC_API_BASE` はバックエンドのURLなので公開してよい。APIキーの扱いは `common.md` §4）
 
 ---
 
@@ -240,7 +227,6 @@ export async function runAgent(text: string, onEvent: (ev: any) => void) {
 | 論文 | 年 | 要約 | 使いどころ |
 |---|---|---|---|
 | [Chain-of-Thought](https://arxiv.org/abs/2201.11903) | 2022 | 答えだけでなく途中の推論も書いた例を few-shot で見せると、LLMも推論を書いてから答えるようになり、算数・常識・記号操作の問題の正答率が大きく上がる。効果が出るのは十分に大きなモデル（約1000億パラメータ以上）で、小さなモデルでは効果がない | 「理由→答え」の順の出力 |
-| [Self-Consistency](https://arxiv.org/abs/2203.11171) | 2022 | CoT の推論を1本だけ出すのではなく、サンプリングで異なる推論を複数出し、最終的な答えを多数決で決める。追加の学習なしで CoT の正答率をさらに上げられる（算数の GSM8K で +17.9 ポイント）。呼び出し回数のぶんコストは増える | 並列化パターン |
 | [ReAct](https://arxiv.org/abs/2210.03629) | 2022 | 「思考（Thought）→ 行動（Action）→ 観察（Observation）」を交互に繰り返すプロンプト形式。行動で Wikipedia 検索などのツールを呼び、その結果を見て次の思考を立てる。推論だけ（CoT）より事実の誤りが減り、行動だけより計画的に動ける。家事を模した ALFWorld と買い物サイトの WebShop では、1〜2個の例だけで模倣学習・強化学習の手法を成功率で34・10ポイント上回った。経過が読めるので人が検証しやすい | **エージェントループの原型（A2）** |
 | [Toolformer](https://arxiv.org/abs/2302.04761) | 2023 | LLMが「どのAPIを、いつ、どんな引数で呼ぶか」を自己教師ありで学習する。文章の途中にAPI呼び出しの候補を自分で挿入して実行し、その結果があると続きを予測しやすくなる呼び出しだけを学習データに残す。電卓・QA・検索・翻訳・カレンダーを使えるようになった 6.7B のモデルが、多くのタスクではるかに大きい GPT-3（175B）に匹敵した | ツール設計の考え方 |
 | [Reflexion](https://arxiv.org/abs/2303.11366) | 2023 | 試行に失敗したら、エージェントが「何が悪かったか、次はどうするか」を言葉で振り返り、その文章を記憶に入れて次の試行のプロンプトに加える。重みは更新せず、言葉のフィードバックだけで強化学習のように改善する（verbal reinforcement）。コード生成の HumanEval で pass@1 91%（当時の GPT-4 単体は 80%）を達成し、ALFWorld や HotpotQA でも試行を重ねるごとに成功率が上がった | 改善ループ（A6） |
@@ -296,8 +282,5 @@ export async function runAgent(text: string, onEvent: (ev: any) => void) {
 ### 付録2. 公式ドキュメント（当日すぐ引く用）
 
 - Claude ツール利用: https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-- Claude 構造化出力: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
 - Gemini 関数呼び出し: https://ai.google.dev/gemini-api/docs/function-calling
-- Gemini モデル一覧: https://ai.google.dev/gemini-api/docs/models
-- OpenAI モデル一覧: https://developers.openai.com/api/docs/models
 - Claude Code: https://code.claude.com/docs
