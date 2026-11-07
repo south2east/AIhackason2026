@@ -72,44 +72,47 @@ export default function Home() {
     setMission(m);
   };
 
-  if (!mission) return <Landing onPick={pick} history={history} />;
+  if (!mission) return <Landing onPick={pick} />;
   return <Play key={mission.id} mission={mission} onExit={() => pick(null)} history={history[mission.id] ?? []} />;
 }
 
 /* ---------------- Landing ---------------- */
 
-function Landing({ onPick, history }: { onPick: (m: Mission) => void; history: Record<string, Record_[]> }) {
+const LEVEL_STYLE: Record<Mission["level"], { card: string; badge: string }> = {
+  かんたん: { card: "border-emerald-300 bg-emerald-50 hover:border-emerald-500", badge: "bg-emerald-500" },
+  ふつう: { card: "border-amber-300 bg-amber-50 hover:border-amber-500", badge: "bg-amber-500" },
+  むずかしい: { card: "border-rose-300 bg-rose-50 hover:border-rose-500", badge: "bg-rose-500" },
+};
+
+function Landing({ onPick }: { onPick: (m: Mission) => void }) {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-16">
-      <p className="text-sm tracking-widest text-muted">BAKERU — プロンプト変身トレーニング</p>
-      <h1 className="mt-3 text-4xl font-black leading-tight sm:text-6xl">
-        AIは毎月化けている。
-        <br />
-        <span className="glow">次は人が化ける番だ！</span>
-      </h1>
-      <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted">
-        相手は<b className="text-foreground">記憶なし・出力{WEAK_MAX_TOKENS}トークンまで</b>のちびAI（Llama 3.1 8B）。
-        1回の指示では絶対に終わらないミッションを、<b className="text-foreground">分けて聞き、組み合わせて</b>完成させよう。
-        あなたのプロンプトは Anthropic / OpenAI の公式ガイドに沿って1回ごとに採点され、最後に
-        <b className="text-lime">「AI適合度」</b>として返ってくる。
-      </p>
+      <div className="text-center">
+        <p className="text-sm tracking-widest text-muted">BAKERU — プロンプト変身トレーニング</p>
+        <h1 className="mt-3 text-4xl font-black leading-tight sm:text-6xl">
+          AIは毎月化けている。
+          <br />
+          <span className="glow">次は人が化ける番だ！</span>
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted">
+          相手は<b className="text-foreground">記憶なし・少ししか話せないちびAI</b>！
+          <br className="hidden sm:block" />
+          うまくミッションをクリアして、<b className="text-lime">AIと仲良くできる聞き方</b>を見つけよう！
+        </p>
+      </div>
 
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         {MISSIONS.map((m) => {
-          const best = Math.max(0, ...(history[m.id] ?? []).map((r) => r.total));
+          const st = LEVEL_STYLE[m.level];
           return (
             <button
               key={m.id}
               onClick={() => onPick(m)}
-              className="group flex flex-col rounded-2xl border border-line bg-panel/80 p-5 text-left transition hover:-translate-y-1 hover:border-lime"
+              className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 text-left transition hover:-translate-y-1 ${st.card}`}
             >
-              <span className="text-xs text-muted">MISSION · {m.level}</span>
-              <span className="mt-2 text-xl font-bold group-hover:text-lime">{m.title}</span>
-              <span className="mt-3 flex-1 text-sm leading-relaxed text-muted">{m.brief}</span>
-              <span className="mt-4 flex items-center justify-between text-sm">
-                <span className="text-muted">完成条件 {m.checklist.length}つ</span>
-                {best > 0 ? <span className="text-lime">自己ベスト {best}</span> : <span className="text-violet">挑戦する →</span>}
-              </span>
+              <span className={`rounded-full px-3 py-0.5 text-xs font-bold text-white ${st.badge}`}>{m.level}</span>
+              <span className="text-xl font-bold">{m.title}</span>
+              <span className="text-sm text-muted">完成条件 {m.checklist.length}つ</span>
             </button>
           );
         })}
@@ -121,7 +124,7 @@ function Landing({ onPick, history }: { onPick: (m: Mission) => void; history: R
           ["2. 組み合わせる", "AIの出力を成果物に集めて、必要なら次のプロンプトに貼って渡す。"],
           ["3. 化ける", "1回ごとに6軸で採点。アドバイスを試すたびにレーダーが育つ。"],
         ].map(([h, t]) => (
-          <div key={h} className="rounded-xl border border-line p-4">
+          <div key={h} className="rounded-xl border border-line bg-panel/70 p-4">
             <p className="font-bold">{h}</p>
             <p className="mt-1 text-sm text-muted">{t}</p>
           </div>
@@ -206,8 +209,8 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           ← ミッション一覧
         </button>
         <div className="rounded-2xl border border-line bg-panel p-4">
-          <p className="text-xs text-muted">MISSION · {mission.level}</p>
-          <h2 className="mt-1 text-lg font-bold">{mission.title}</h2>
+          <span className={`rounded-full px-3 py-0.5 text-xs font-bold text-white ${LEVEL_STYLE[mission.level].badge}`}>{mission.level}</span>
+          <h2 className="mt-2 text-lg font-bold">{mission.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">{mission.brief}</p>
           <p className="mt-4 text-xs font-bold text-lime">完成条件</p>
           <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
@@ -272,7 +275,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
             <button
               onClick={send}
               disabled={busy || !input.trim()}
-              className="rounded-xl bg-lime px-5 py-2 font-bold text-background transition hover:brightness-110 disabled:opacity-40"
+              className="rounded-xl bg-lime px-5 py-2 font-bold text-white transition hover:brightness-110 disabled:opacity-40"
             >
               {busy ? "考え中…" : "送信"}
             </button>
@@ -293,7 +296,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         <button
           onClick={submit}
           disabled={submitting || !answer.trim() || turns.length === 0}
-          className="mt-3 rounded-xl bg-violet px-5 py-3 font-bold transition hover:brightness-110 disabled:opacity-40"
+          className="mt-3 rounded-xl bg-violet px-5 py-3 font-bold text-white transition hover:brightness-110 disabled:opacity-40"
         >
           {submitting ? "審査中…" : "提出して AI適合度 を見る"}
         </button>
@@ -303,7 +306,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 75 ? "bg-lime text-background" : score >= 50 ? "bg-violet" : "bg-line";
+  const color = score >= 75 ? "bg-lime text-white" : score >= 50 ? "bg-violet text-white" : "bg-line";
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${color}`}>{score}点</span>;
 }
 
@@ -368,13 +371,13 @@ function TurnView({
       <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-line/60 p-3">
         <p className="mb-1 text-xs text-muted">ちびAI</p>
         {turn.error ? (
-          <p className="text-sm text-red-300">エラー: {turn.error}</p>
+          <p className="text-sm text-red-600">エラー: {turn.error}</p>
         ) : turn.response === undefined ? (
           <p className="animate-pulse text-sm text-muted">…</p>
         ) : (
           <>
             <p className="whitespace-pre-wrap text-sm">{turn.response}</p>
-            {turn.truncated && <p className="mt-1 text-xs text-amber-300">⚠ 出力上限で途中で切れました。頼む量を減らそう。</p>}
+            {turn.truncated && <p className="mt-1 text-xs text-amber-600">⚠ 出力上限で途中で切れました。頼む量を減らそう。</p>}
             <div className="mt-2 flex gap-2">
               <button onClick={() => onAdd(turn.response!)} className="rounded-lg bg-violet/30 px-2 py-1 text-xs hover:bg-violet/50">
                 成果物に追加
@@ -486,7 +489,7 @@ function Result({
               const it = final.items.find((x) => x.index === i + 1);
               return (
                 <li key={c} className="flex gap-2">
-                  <span className={it?.passed ? "text-lime" : "text-red-300"}>{it?.passed ? "✔" : "✘"}</span>
+                  <span className={it?.passed ? "text-lime" : "text-red-600"}>{it?.passed ? "✔" : "✘"}</span>
                   <span>
                     {c}
                     {it && <span className="block text-xs text-muted">{it.reason}</span>}
@@ -520,7 +523,7 @@ function Result({
       </div>
 
       <div className="mt-10 flex flex-wrap gap-3">
-        <button onClick={onRetry} className="rounded-xl bg-lime px-6 py-3 font-bold text-background">
+        <button onClick={onRetry} className="rounded-xl bg-lime px-6 py-3 font-bold text-white">
           もう一度化けに行く
         </button>
       </div>

@@ -18,22 +18,22 @@ export function Radar({ scores, compare, size = 260 }: { scores: AxisScores; com
           key={lv}
           points={AXES.map((_, i) => pt(i, lv).join(",")).join(" ")}
           fill="none"
-          stroke="#2c2840"
+          className="stroke-line"
           strokeWidth={lv === 5 ? 1.5 : 1}
         />
       ))}
       {AXES.map((_, i) => {
         const [x, y] = pt(i, 5);
-        return <line key={i} x1={c} y1={c} x2={x} y2={y} stroke="#2c2840" />;
+        return <line key={i} x1={c} y1={c} x2={x} y2={y} className="stroke-line" />;
       })}
-      {compare && <polygon points={poly(compare)} fill="#9b6bff22" stroke="#9b6bff" strokeDasharray="4 3" strokeWidth={1.5} />}
-      <polygon points={poly(scores)} fill="#c6ff3d33" stroke="#c6ff3d" strokeWidth={2} />
+      {compare && <polygon points={poly(compare)} fill="#6d3cff1a" stroke="#6d3cff" strokeDasharray="4 3" strokeWidth={1.5} />}
+      <polygon points={poly(scores)} fill="#3a8a0a2e" stroke="#3a8a0a" strokeWidth={2} />
       {AXES.map((ax, i) => {
         const [x, y] = pt(i, 6.3);
         return (
-          <text key={ax.key} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="#ece9f5">
+          <text key={ax.key} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize="12" className="fill-foreground">
             {ax.label}
-            <tspan x={x} dy="14" fontSize="11" fill="#c6ff3d">
+            <tspan x={x} dy="14" fontSize="11" className="fill-lime">
               {scores[ax.key].toFixed(1)}
             </tspan>
           </text>

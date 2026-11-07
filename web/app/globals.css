@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0d0b14;
-  --foreground: #ece9f5;
+  --background: #faf8f3;
+  --foreground: #221d33;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-panel: #171425;
-  --color-line: #2c2840;
-  --color-muted: #9b95b3;
-  --color-lime: #c6ff3d;
-  --color-violet: #9b6bff;
+  --color-panel: #ffffff;
+  --color-line: #e7e3da;
+  --color-muted: #6e6882;
+  --color-lime: #3a8a0a;
+  --color-violet: #6d3cff;
   --font-sans: var(--font-main);
 }
 
 body {
   background:
-    radial-gradient(1200px 600px at 10% -10%, #2a1b4d 0%, transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, #1c3a12 0%, transparent 55%),
+    radial-gradient(1100px 520px at 0% -10%, #ece4ff 0%, transparent 60%),
+    radial-gradient(900px 480px at 110% 0%, #e3f7d4 0%, transparent 55%),
     var(--background);
   background-attachment: fixed;
   color: var(--foreground);
