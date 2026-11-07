@@ -795,6 +795,54 @@ function Result({
         </section>
       </div>
 
+      <section className="mt-6 rounded-2xl border border-line bg-panel p-5">
+        <p className="text-lg font-bold">あなたのお願いの履歴</p>
+        <ol className="mt-4 space-y-4">
+          {turns.map((t, i) => (
+            <li key={t.id} className="rounded-xl border border-line bg-background p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-bold text-muted">{i + 1}回目</span>
+                {t.judge ? <ScoreBadge score={promptScore(t.judge)} /> : <span className="text-sm text-muted">採点なし</span>}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-base">{t.prompt}</p>
+              {t.judge && (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-6">
+                    {AXES.map((a) => (
+                      <div key={a.key} title={a.source}>
+                        <p className="text-xs text-muted">
+                          {a.label} {t.judge![a.key]}
+                        </p>
+                        <div className="h-2 rounded bg-line">
+                          <div className="h-2 rounded bg-lime" style={{ width: `${(t.judge![a.key] / 5) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-sm">
+                    <span className="text-lime">◎</span> {t.judge.good}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    <span className="font-bold text-violet">アドバイス:</span> {t.judge.advice}
+                  </p>
+                </>
+              )}
+              {t.knowhow && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm">
+                  <b>💡 ノウハウ発見:</b> {t.knowhow.title} — {t.knowhow.tip}
+                </p>
+              )}
+              {t.response && (
+                <details className="mt-2 text-sm">
+                  <summary className="cursor-pointer text-muted">AIの答えを見る</summary>
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-panel p-3">{t.response}</p>
+                </details>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <div className="mt-10 flex flex-wrap gap-3">
         <button onClick={onRetry} className="rounded-xl bg-lime px-6 py-3 font-bold text-white">
           もう一度化けに行く
