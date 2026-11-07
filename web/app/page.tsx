@@ -272,7 +272,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 lg:h-screen">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4">
       {/* Mission */}
       <header className="rounded-2xl border border-line bg-panel px-5 py-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
@@ -298,9 +298,9 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </ol>
       </header>
 
-      <div className="grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Chat */}
-        <section className="flex min-h-[70vh] flex-col rounded-2xl border border-line bg-panel shadow-sm lg:min-h-0">
+        <section className="flex h-[85vh] min-h-[560px] flex-col rounded-2xl border border-line bg-panel shadow-sm">
           <div className="border-b border-line px-5 py-3">
             <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
             <p className="text-sm text-muted">
@@ -368,7 +368,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </section>
 
         {/* Answer */}
-        <section className="flex min-h-[60vh] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm lg:min-h-0">
+        <section className="flex h-[85vh] min-h-[560px] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm">
           <p className="text-lg font-bold">② 提出するもの</p>
           <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
           <textarea
