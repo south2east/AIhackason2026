@@ -8,6 +8,7 @@ export const PROMPT_MAX_CHARS = 1500;
 export type Mission = {
   id: string;
   title: string;
+  short: string;
   level: "かんたん" | "ふつう" | "むずかしい";
   brief: string;
   checklist: string[];
@@ -17,7 +18,8 @@ export type Mission = {
 export const MISSIONS: Mission[] = [
   {
     id: "shinkan",
-    title: "新歓イベントの企画書をつくれ",
+    title: "新歓イベントを企画しよう",
+    short: "イベント名・スケジュール・予算を決めて、企画書にまとめる",
     level: "かんたん",
     brief:
       "大学のAI研究サークルの新入生歓迎イベント（4月第2土曜、13:00〜16:00、参加者30人、予算5万円）の企画書を完成させる。",
@@ -32,22 +34,24 @@ export const MISSIONS: Mission[] = [
   },
   {
     id: "lp",
-    title: "AI枕「ネムール」のLP原稿をつくれ",
+    title: "新商品「AI枕」の宣伝文をつくろう",
+    short: "キャッチコピー・おすすめポイント・よくある質問をそろえる",
     level: "ふつう",
     brief:
-      "睡眠を記録して最適な高さに自動調整する架空のAI枕「ネムール」（税込19,800円）のランディングページ原稿を完成させる。",
+      "睡眠を記録して最適な高さに自動調整する架空のAI枕「ネムール」（税込19,800円）の宣伝ページに載せる文章を完成させる。",
     checklist: [
       "キャッチコピー（20字以内）",
-      "ターゲット像（年齢層と、睡眠の具体的な悩み）",
-      "特徴3つ（それぞれ見出しと説明文）",
-      "FAQ 3問（質問と回答のセット）",
-      "全体の一貫性（ターゲットの悩みと特徴が対応していて、価格の表記が正しい）",
+      "どんな人向けか（年齢層と、睡眠の具体的な悩み）",
+      "おすすめポイント3つ（それぞれ見出しと説明文）",
+      "よくある質問3つ（質問と答えのセット）",
+      "全体のつじつま（向けている人の悩みとおすすめポイントが対応していて、価格の表記が正しい）",
     ],
     idealPrompts: 5,
   },
   {
     id: "kyoto",
-    title: "京都1泊2日・3万円旅行プランをつくれ",
+    title: "3万円で京都1泊2日の旅を計画しよう",
+    short: "行き先・移動手段・費用の計算までそろえた旅行プランをつくる",
     level: "むずかしい",
     brief:
       "東京から京都へ大学生2人で行く1泊2日の旅行プランを、1人あたり総額3万円以内（交通費・宿・食費・拝観料込み）で完成させる。",
@@ -65,37 +69,37 @@ export const MISSIONS: Mission[] = [
 export const AXES = [
   {
     key: "clarity",
-    label: "明確さ",
+    label: "はっきり",
     desc: "何をしてほしいかが具体的で曖昧さがない",
     source: "Anthropic「Be clear, direct, and detailed」/ OpenAI「Write clear instructions」",
   },
   {
     key: "context",
-    label: "文脈・役割",
+    label: "背景",
     desc: "目的・読み手・前提・役割を伝えている",
     source: "Anthropic「Give Claude a role / context」/ OpenAI「Provide reference text」",
   },
   {
     key: "format",
-    label: "出力形式",
+    label: "形の指定",
     desc: "形式・長さ・項目を指定している",
     source: "Anthropic「Control the format of responses」/ OpenAI「Specify the desired length」",
   },
   {
     key: "structure",
-    label: "構造化",
+    label: "区切り",
     desc: "指示・資料・条件をタグや区切りで分けている",
     source: "Anthropic「Use XML tags」/ OpenAI「Use delimiters」",
   },
   {
     key: "examples",
-    label: "例示",
+    label: "例を見せる",
     desc: "必要な場面で例やテンプレートを見せている",
     source: "Anthropic「Use examples (multishot)」/ OpenAI「Provide examples」",
   },
   {
     key: "decomposition",
-    label: "分解",
+    label: "小分け",
     desc: "弱いAIがこなせる大きさに切り出し、前の出力を活かしている",
     source: "Anthropic「Chain complex prompts」/ OpenAI「Split complex tasks into simpler subtasks」",
   },
