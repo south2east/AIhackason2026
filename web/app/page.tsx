@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Buddy, STAGES, moodOf, stageOf, type Mood } from "@/components/Buddy";
 import { Radar } from "@/components/Radar";
 import {
   AXES,
@@ -55,6 +56,17 @@ const avgAxes = (turns: Turn[]): AxisScores | null => {
   const js = turns.map((t) => t.judge).filter((j): j is PromptJudge => !!j);
   if (!js.length) return null;
   return Object.fromEntries(AXES.map((a) => [a.key, js.reduce((s, j) => s + j[a.key], 0) / js.length])) as AxisScores;
+};
+
+// One prompt's score (0-100): the 6-axis judge for beginners, the coach for advanced.
+const turnScore = (t: Turn) => (t.judge ? promptScore(t.judge) : t.coach?.score);
+const scoresOf = (turns: Turn[]) => turns.map(turnScore).filter((x): x is number => x !== undefined);
+
+const LINES: Record<Mood, string> = {
+  happy: "いいね！その頼み方、めっちゃ分かりやすい！",
+  normal: "なるほど…もうちょっと具体的だと助かるかも",
+  sour: "うーん、何をすればいいか分からない…",
+  thinking: "考え中…",
 };
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -286,6 +298,10 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   };
 
   const found = turns.filter((t) => t.knowhow).map((t) => t.knowhow!);
+  const scores = scoresOf(turns);
+  const stage = stageOf(scores);
+  const last = turns.at(-1);
+  const mood = moodOf(last ? turnScore(last) : undefined, !!last && turnScore(last) === undefined);
 
   if (final) {
     return <Result mission={mission} turns={turns} final={final} prev={history.at(-1)} onRetry={onExit} />;
@@ -321,11 +337,18 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       <div className="grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-2">
         {/* Chat */}
         <section className="flex min-h-[70vh] flex-col rounded-2xl border border-line bg-panel shadow-sm lg:min-h-0">
-          <div className="border-b border-line px-5 py-3">
-            <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
-            <p className="text-sm text-muted">
-              {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"}（{tier.modelLabel}）
-            </p>
+          <div className="flex items-center gap-3 border-b border-line px-5 py-2">
+            <Buddy stage={stage} mood={mood} size={84} />
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
+              <p className="text-sm text-muted">
+                {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"}（{tier.modelLabel}）
+              </p>
+              <p className="mt-1 inline-block rounded-xl rounded-tl-sm bg-background px-3 py-1 text-sm">
+                {turns.length ? LINES[mood] : "やあ。まだひょろひょろだけど、いい頼み方でムキムキになるよ！"}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-background px-3 py-1 text-xs font-bold text-muted">{STAGES[stage].name}</span>
           </div>
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
             {turns.length === 0 && (
@@ -528,7 +551,8 @@ function Result({
   prev?: Record_;
   onRetry: () => void;
 }) {
-  const scoreOf = (t: Turn) => (t.judge ? promptScore(t.judge) : (t.coach?.score ?? 0));
+  const scoreOf = (t: Turn) => turnScore(t) ?? 0;
+  const buddyStage = stageOf(scoresOf(turns));
   const judged = turns.filter((t) => t.judge || t.coach);
   const promptAvg = judged.length ? Math.round(judged.reduce((s, t) => s + scoreOf(t), 0) / judged.length) : 0;
   const passed = final.items.filter((i) => i.passed).length;
@@ -565,8 +589,14 @@ function Result({
             </p>
           )}
           <p className="mt-6 text-sm text-muted">化け度</p>
-          <p className="text-4xl font-black text-lime">{rank.name}</p>
-          <p className="mt-1">{rank.note}</p>
+          <div className="flex items-center gap-4">
+            <Buddy stage={buddyStage} mood={total >= 75 ? "happy" : total >= 50 ? "normal" : "sour"} size={120} />
+            <div>
+              <p className="text-4xl font-black text-lime">{rank.name}</p>
+              <p className="mt-1">{rank.note}</p>
+              <p className="mt-1 text-sm text-muted">AIキャラ: {STAGES[buddyStage].name}</p>
+            </div>
+          </div>
 
           <div className="mt-6 grid grid-cols-3 gap-3 text-center">
             {[

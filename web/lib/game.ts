@@ -21,9 +21,9 @@ export const TIERS: Record<
   advanced: {
     label: "上級者",
     aiName: "かしこAI",
-    model: "anthropic/claude-sonnet-5.5",
-    modelLabel: "Claude Sonnet 5.5",
-    maxTokens: 2000,
+    model: "anthropic/claude-haiku-5.5",
+    modelLabel: "Claude Haiku 5.5",
+    maxTokens: 1200,
     memory: true,
     desc: "会話を覚えている賢いAIと自由に対話。頼み方をコーチが見て、使えるノウハウを教えてくれる",
   },
