@@ -61,7 +61,8 @@ ${mission.checklist.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 ${prompt}
 </player_prompt>`,
     });
-    return Response.json(output satisfies PromptJudge);
+    // The model sometimes pads with whitespace; trim it.
+    return Response.json({ ...output, improved: output.improved.trim() } satisfies PromptJudge);
   } catch (e) {
     console.error("judge-prompt failed", e);
     return Response.json(demo(prompt));
