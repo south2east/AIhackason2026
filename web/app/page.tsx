@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Chara } from "@/components/Chara";
 import { Radar } from "@/components/Radar";
 import {
   AXES,
@@ -223,11 +224,12 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   const [auto, setAuto] = useState<{ step: number; total: number } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
 
-  async function ask(prompt: string): Promise<string | undefined> {
+  async function ask(prompt: string, waitAll = false): Promise<string | undefined> {
     const id = Date.now();
     const done = doneRef.current;
     setTurns((ts) => [...ts, { id, prompt }]);
     let response: string | undefined;
+    let extracting: Promise<unknown> = Promise.resolve();
     await Promise.all([
       post<{ text: string; truncated: boolean }>("/api/ask", { prompt, tier: mission.tier, history: tier.memory ? done : [] })
         .then((r) => {
@@ -236,7 +238,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           doneRef.current = [...doneRef.current, { prompt, response: r.text }];
           // Look for a prompt tweak that improved the answer (runs in background).
           if (done.length)
-            post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
+            extracting = post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
               missionId: mission.id,
               previous: done.slice(-3),
               current: { prompt, response: r.text },
@@ -251,6 +253,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         .then((j) => update(id, { judge: j }))
         .catch(() => {}),
     ]);
+    if (waitAll) await extracting;
     return response;
   }
 
@@ -282,17 +285,18 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
     for (const [i, step] of mission.rally.entries()) {
       setAuto({ step: i + 1, total: mission.rally.length });
       const prompt = step.prompt.replace(/\{\{r(\d+)\}\}/g, (_, n) => (answers[Number(n) - 1] ?? "").trim());
-      const r = (await ask(prompt)) ?? "";
+      const r = (await ask(prompt, true)) ?? "";
       answers.push(r);
       if (step.add === "append") built = `${built}${built ? "\n\n" : ""}${r.trim()}`;
       if (step.add === "replace") built = r.trim();
       setAnswer(built);
+      // Pause so viewers can read the score, advice and any know-how before the next step.
+      await new Promise((res) => setTimeout(res, 4000));
     }
-    // Give the know-how extractor a moment to report before leaving the play screen.
-    await new Promise((res) => setTimeout(res, 9000));
     setAuto(null);
     setBusy(false);
-    await submit(built);
+    // Stop at the editor; the player presses submit themselves.
+    setEditorOpen(true);
   }
 
   const quote = (text: string) => {
@@ -309,7 +313,6 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   const last = turns.at(-1);
   const lj = last?.judge;
   const lastScore = lj ? promptScore(lj) : null;
-  const chara = mission.tier === "beginner" ? "🐤" : "🐓";
   const cry = mission.tier === "beginner" ? "ピヨ！" : "コケッ！";
   const reaction = !last
     ? `なにをお手伝いしようか？${cry}`
@@ -388,9 +391,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </div>
 
         <div className="flex flex-col items-center">
-          <span className={`select-none text-[88px] leading-none ${busy ? "animate-bounce" : ""}`} role="img" aria-label={tier.aiName}>
-            {chara}
-          </span>
+          <Chara kind={mission.tier === "beginner" ? "chick" : "rooster"} busy={busy} />
           <span className="mt-1 text-sm font-bold">{tier.aiName}</span>
           <span className="mt-1 text-center text-base">{reaction}</span>
         </div>
