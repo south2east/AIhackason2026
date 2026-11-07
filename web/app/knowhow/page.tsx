@@ -115,7 +115,7 @@ export default function KnowhowPage() {
       ) : (
         <div className="mt-6 space-y-8">
           {AXES.map((ax) => {
-            const group = shown.filter((k) => k.category === ax.key);
+            const group = shown.filter((k) => k.category === ax.key).sort((x, y) => (y.count ?? 1) - (x.count ?? 1));
             if (!group.length) return null;
             return (
               <section key={ax.key}>
@@ -131,6 +131,9 @@ export default function KnowhowPage() {
                         <span className="flex-1">
                           <span className="flex flex-wrap items-center gap-2">
                             <b>{k.title}</b>
+                            {(k.count ?? 1) > 1 && (
+                              <span className="rounded-full bg-amber-400 px-2 text-[11px] font-bold">👥 {k.count}回発見</span>
+                            )}
                             <span className="rounded-full bg-background px-2 text-[11px] text-muted">
                               {TIERS[k.tier].label} · {MISSIONS.find((m) => m.id === k.missionId)?.title ?? k.missionId}
                             </span>

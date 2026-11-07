@@ -27,6 +27,7 @@ type Turn = {
   truncated?: boolean;
   judge?: PromptJudge;
   knowhow?: Knowhow;
+  knowhowDup?: boolean;
   error?: string;
 };
 
@@ -238,13 +239,13 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           doneRef.current = [...doneRef.current, { prompt, response: r.text }];
           // Look for a prompt tweak that improved the answer (runs in background).
           if (done.length)
-            extracting = post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
+            extracting = post<{ found: boolean; duplicate?: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
               missionId: mission.id,
               previous: done.slice(-3),
               current: { prompt, response: r.text },
             })
               .then((x) => {
-                if (x.found && x.knowhow) update(id, { knowhow: x.knowhow });
+                if (x.found && x.knowhow) update(id, { knowhow: x.knowhow, knowhowDup: !!x.duplicate });
               })
               .catch(() => {});
         })
@@ -432,9 +433,11 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
             )}
             {last.knowhow && (
               <div className="mt-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-3">
-                <p className="text-lg font-bold">💡 ノウハウ発見！「{last.knowhow.title}」</p>
+                <p className="text-lg font-bold">
+                  {last.knowhowDup ? `💡 ノウハウ再発見！「${last.knowhow.title}」（${last.knowhow.count}回目の発見）` : `💡 ノウハウ発見！「${last.knowhow.title}」`}
+                </p>
                 <p className="mt-1 text-base">{last.knowhow.tip}</p>
-                <p className="mt-1 text-sm text-muted">みんなのノウハウ集に保存しました</p>
+                <p className="mt-1 text-sm text-muted">{last.knowhowDup ? "同じ工夫がすでにノウハウ集にあったので、発見数を+1しました" : "みんなのノウハウ集に保存しました"}</p>
               </div>
             )}
           </div>
@@ -634,7 +637,9 @@ function TurnView({
       </div>
       {turn.knowhow && (
         <div className="max-w-[92%] rounded-2xl border-2 border-amber-400 bg-amber-50 p-4">
-          <p className="text-lg font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
+          <p className="text-lg font-bold">
+            {turn.knowhowDup ? "💡 ノウハウ再発見！" : "💡 ノウハウ発見！"}「{turn.knowhow.title}」
+          </p>
           <p className="mt-1 text-base">{turn.knowhow.tip}</p>
           <p className="mt-1 text-sm text-muted">みんなのノウハウ集に保存しました</p>
         </div>

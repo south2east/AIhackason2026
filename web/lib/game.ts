@@ -266,6 +266,7 @@ export type Knowhow = {
   tier: Tier;
   missionId: string;
   createdAt: number;
+  count?: number;
 };
 
 export const rankOf = (score: number) => RANKS.find((r) => score >= r.min)!;
