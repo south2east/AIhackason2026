@@ -62,8 +62,10 @@ export default function Home() {
   const [history, setHistory] = useState<Record<string, Record_[]>>({});
 
   // localStorage is only available after hydration.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setHistory(loadHistory()), []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHistory(loadHistory());
+  }, []);
 
   const pick = (m: Mission | null) => {
     setHistory(loadHistory());
@@ -141,7 +143,10 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   const bottom = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns.length]);
+  // Braces matter: scrollIntoView() returns a Promise in recent Chrome, and an effect must not return one.
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns.length]);
 
   const update = (id: number, patch: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
@@ -494,13 +499,15 @@ function Result({
         </section>
         <section className="rounded-2xl border border-line bg-panel p-5">
           <p className="font-bold">プロンプトの成長</p>
-          <div className="mt-4 flex h-32 items-end gap-2">
+          <div className="mt-4 flex items-end gap-2">
             {judged.map((t, i) => {
               const s = promptScore(t.judge!);
               return (
                 <div key={t.id} className="flex flex-1 flex-col items-center gap-1">
                   <span className="text-xs">{s}</span>
-                  <div className="w-full rounded-t bg-gradient-to-t from-violet to-lime" style={{ height: `${Math.max(4, s)}%` }} />
+                  <div className="flex h-24 w-full items-end">
+                    <div className="w-full rounded-t bg-gradient-to-t from-violet to-lime" style={{ height: `${Math.max(4, s)}%` }} />
+                  </div>
                   <span className="text-[10px] text-muted">{i + 1}</span>
                 </div>
               );
