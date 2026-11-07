@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   try {
     const { output } = await generateText({
       model: JUDGE_MODEL,
-      reasoning: "none",
+      reasoning: "low",
       system: SYSTEM,
       output: Output.object({ schema }),
       prompt: `<mission>
