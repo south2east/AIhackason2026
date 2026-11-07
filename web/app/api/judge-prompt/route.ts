@@ -14,7 +14,9 @@ const schema = z.object({
   decomposition: score,
   good: z.string().describe("このプロンプトの良い点（40字以内）"),
   advice: z.string().describe("一番効く改善点を1つ（60字以内）"),
-  improved: z.string().describe("同じ意図で、ガイドに沿って書き直したプロンプト（300字以内）"),
+  improved: z
+    .string()
+    .describe("同じ意図で、ガイドに沿って書き直したプロンプトの本文だけ（250字以内）。前置き・解説・注釈・「以上です」などは含めない"),
 });
 
 const SYSTEM = `あなたはプロンプトエンジニアリングの審査員です。
