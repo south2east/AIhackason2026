@@ -398,15 +398,22 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </div>
 
         {last && (
-          <div className="w-full max-w-3xl rounded-2xl border border-line bg-background p-4">
+          <div className="w-full max-w-3xl space-y-3">
+          <div className="rounded-2xl border-2 border-lime/40 bg-panel p-4">
+            <p className="text-sm font-bold text-lime">あなたのお願い（{turns.length}回目）</p>
+            <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap text-base leading-relaxed">{last.prompt}</p>
+          </div>
+          <div className="rounded-2xl border border-line bg-background p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm text-muted">直前のあなたのお願い（{turns.length}回目）の評価</p>
+              <p className="text-base font-bold">このお願いの評価</p>
               {lastScore !== null ? <ScoreBadge score={lastScore} /> : <span className="text-sm text-muted">採点中…</span>}
             </div>
-            <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted">{last.prompt}</p>
             {lj && (
               <>
                 <p className="mt-2 text-base">
+                  <span className="font-bold text-lime">◎</span> {lj.good}
+                </p>
+                <p className="mt-1 text-base">
                   <span className="font-bold text-violet">アドバイス:</span> {lj.advice}
                 </p>
                 <details className="mt-1 text-sm">
@@ -440,6 +447,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
                 <p className="mt-1 text-sm text-muted">{last.knowhowDup ? "同じ工夫がすでにノウハウ集にあったので、発見数を+1しました" : "みんなのノウハウ集に保存しました"}</p>
               </div>
             )}
+          </div>
           </div>
         )}
       </section>
