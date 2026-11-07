@@ -1,15 +1,39 @@
-// Shared game definitions: missions, scoring axes, and score math.
+// Shared game definitions: levels, missions, scoring axes, know-how, and score math.
 
-export const WEAK_MODEL = "meta/llama-3.1-8b";
 export const JUDGE_MODEL = "anthropic/claude-sonnet-5.5";
-export const WEAK_MAX_TOKENS = 220;
-export const PROMPT_MAX_CHARS = 1500;
+export const PROMPT_MAX_CHARS = 2000;
+
+export type Tier = "beginner" | "advanced";
+
+export const TIERS: Record<
+  Tier,
+  { label: string; aiName: string; model: string; modelLabel: string; maxTokens: number; memory: boolean; desc: string }
+> = {
+  beginner: {
+    label: "初心者",
+    aiName: "ちびAI",
+    model: "meta/llama-3.1-8b",
+    modelLabel: "Llama 3.1 8B",
+    maxTokens: 220,
+    memory: false,
+    desc: "前回までのやり取りを把握していない、少ししか話せない小さなAI",
+  },
+  advanced: {
+    label: "上級者",
+    aiName: "かしこAI",
+    model: "anthropic/claude-haiku-5.5",
+    modelLabel: "Claude Haiku 5.5",
+    maxTokens: 1200,
+    memory: true,
+    desc: "会話の流れを覚えていて、長く話せるAI。そのぶん求められる質も高い",
+  },
+};
 
 export type Mission = {
   id: string;
+  tier: Tier;
   title: string;
   short: string;
-  level: "かんたん" | "ふつう" | "むずかしい";
   brief: string;
   checklist: string[];
   idealPrompts: number;
@@ -19,8 +43,8 @@ export const MISSIONS: Mission[] = [
   {
     id: "shinkan",
     title: "新歓イベントを企画しよう",
+    tier: "beginner",
     short: "イベント名・スケジュール・予算を決めて、企画書にまとめる",
-    level: "かんたん",
     brief:
       "大学のAI研究サークルの新入生歓迎イベント（4月第2土曜、13:00〜16:00、参加者30人、予算5万円）の企画書を完成させる。",
     checklist: [
@@ -35,8 +59,8 @@ export const MISSIONS: Mission[] = [
   {
     id: "lp",
     title: "新商品「AI枕」の宣伝文をつくろう",
+    tier: "beginner",
     short: "キャッチコピー・おすすめポイント・よくある質問をそろえる",
-    level: "ふつう",
     brief:
       "睡眠を記録して最適な高さに自動調整する架空のAI枕「ネムール」（税込19,800円）の宣伝ページに載せる文章を完成させる。",
     checklist: [
@@ -51,8 +75,8 @@ export const MISSIONS: Mission[] = [
   {
     id: "kyoto",
     title: "3万円で京都1泊2日の旅を計画しよう",
+    tier: "advanced",
     short: "行き先・移動手段・費用の計算までそろえた旅行プランをつくる",
-    level: "むずかしい",
     brief:
       "東京から京都へ大学生2人で行く1泊2日の旅行プランを、1人あたり総額3万円以内（交通費・宿・食費・拝観料込み）で完成させる。",
     checklist: [
@@ -63,6 +87,22 @@ export const MISSIONS: Mission[] = [
       "持ち物リスト（5つ以上）",
     ],
     idealPrompts: 6,
+  },
+  {
+    id: "guideline",
+    tier: "advanced",
+    title: "新入社員向け「生成AI利用ルール」をつくろう",
+    short: "禁止事項・OK例とNG例・迷ったときの判断手順を1枚にまとめる",
+    brief:
+      "社員50人のIT企業で、新入社員に配る「生成AIの使い方ルール」を1枚（全体で1200字以内）にまとめる。読み手はAIを使ったことがない新入社員。",
+    checklist: [
+      "禁止事項が5つ以上あり、それぞれ理由が一言ついている",
+      "OK例とNG例のペアが3組以上（具体的な入力文の例つき）",
+      "迷ったときの判断手順（3ステップ以上の順番つき）",
+      "専門用語を使うときは言い換えや説明がある（新入社員が読める）",
+      "全体で1200字以内に収まっている",
+    ],
+    idealPrompts: 5,
   },
 ];
 
@@ -100,7 +140,7 @@ export const AXES = [
   {
     key: "decomposition",
     label: "小分け",
-    desc: "弱いAIがこなせる大きさに切り出し、前の出力を活かしている",
+    desc: "AIがこなせる大きさに切り出し、前の答えを活かしている",
     source: "Anthropic「Chain complex prompts」/ OpenAI「Split complex tasks into simpler subtasks」",
   },
 ] as const;
@@ -139,5 +179,18 @@ export const RANKS = [
   { min: 40, name: "幼虫", note: "AIとの会話に慣れてきた。伝え方を磨こう。" },
   { min: 0, name: "たまご", note: "まだ殻の中。アドバイスを1つ試すだけで化け始める。" },
 ];
+
+export type Knowhow = {
+  id: string;
+  title: string;
+  tip: string;
+  why: string;
+  before: string;
+  after: string;
+  category: AxisKey;
+  tier: Tier;
+  missionId: string;
+  createdAt: number;
+};
 
 export const rankOf = (score: number) => RANKS.find((r) => score >= r.min)!;

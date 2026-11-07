@@ -1,19 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Radar } from "@/components/Radar";
 import {
   AXES,
   MISSIONS,
   PROMPT_MAX_CHARS,
-  WEAK_MAX_TOKENS,
+  TIERS,
   promptScore,
   rankOf,
   totalScore,
   type AxisScores,
   type FinalJudge,
+  type Knowhow,
   type Mission,
   type PromptJudge,
+  type Tier,
 } from "@/lib/game";
 
 type Turn = {
@@ -22,6 +25,7 @@ type Turn = {
   response?: string;
   truncated?: boolean;
   judge?: PromptJudge;
+  knowhow?: Knowhow;
   error?: string;
 };
 
@@ -57,14 +61,33 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return r.json();
 }
 
+const TIER_STYLE: Record<Tier, { card: string; head: string; button: string; badge: string }> = {
+  beginner: {
+    card: "border-emerald-300 bg-emerald-50",
+    head: "bg-emerald-500",
+    button: "bg-emerald-500 hover:bg-emerald-600",
+    badge: "bg-emerald-500",
+  },
+  advanced: {
+    card: "border-violet/40 bg-violet/5",
+    head: "bg-violet",
+    button: "bg-violet hover:brightness-110",
+    badge: "bg-violet",
+  },
+};
+
 export default function Home() {
   const [mission, setMission] = useState<Mission | null>(null);
   const [history, setHistory] = useState<Record<string, Record_[]>>({});
+  const [tipCount, setTipCount] = useState<number | null>(null);
 
-  // localStorage is only available after hydration.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHistory(loadHistory());
+    fetch("/api/knowhow")
+      .then((r) => r.json())
+      .then((d) => setTipCount(d.items?.length ?? 0))
+      .catch(() => {});
   }, []);
 
   const pick = (m: Mission | null) => {
@@ -72,60 +95,44 @@ export default function Home() {
     setMission(m);
   };
 
-  if (!mission) return <Landing onPick={pick} />;
+  if (!mission) return <Landing onPick={pick} tipCount={tipCount} />;
   return <Play key={mission.id} mission={mission} onExit={() => pick(null)} history={history[mission.id] ?? []} />;
 }
 
 /* ---------------- Landing ---------------- */
 
-const LEVEL_STYLE: Record<Mission["level"], { card: string; badge: string; button: string; stars: string }> = {
-  かんたん: {
-    card: "border-emerald-300 bg-emerald-50 hover:border-emerald-500 hover:shadow-emerald-200",
-    badge: "bg-emerald-500",
-    button: "bg-emerald-500",
-    stars: "★☆☆",
-  },
-  ふつう: {
-    card: "border-amber-300 bg-amber-50 hover:border-amber-500 hover:shadow-amber-200",
-    badge: "bg-amber-500",
-    button: "bg-amber-500",
-    stars: "★★☆",
-  },
-  むずかしい: {
-    card: "border-rose-300 bg-rose-50 hover:border-rose-500 hover:shadow-rose-200",
-    badge: "bg-rose-500",
-    button: "bg-rose-500",
-    stars: "★★★",
-  },
-};
-
-function Landing({ onPick }: { onPick: (m: Mission) => void }) {
+function Landing({ onPick, tipCount }: { onPick: (m: Mission) => void; tipCount: number | null }) {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-6 px-4 py-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-5 px-4 py-6">
       <div className="text-center">
-        <p className="text-xs tracking-widest text-muted">BAKERU — プロンプト変身トレーニング</p>
+        <p className="text-xs tracking-widest text-muted">BAKERU — みんなでつくるAIノウハウ集</p>
         <h1 className="mt-2 text-3xl font-black leading-tight sm:text-5xl">
           AIは毎月化けている。
           <br />
           <span className="glow">次は人が化ける番だ！</span>
         </h1>
         <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted">
-          相手は<b className="text-foreground">前回までのやり取りを把握していない、少ししか話せないちびAI</b>！
+          ミッションに挑戦して、<b className="text-foreground">AIからいい答えを引き出す工夫</b>を見つけよう。
           <br className="hidden sm:block" />
-          うまくミッションをクリアして、<b className="text-lime">AIと仲良くできる聞き方</b>を見つけよう！
+          効いた工夫はみんなの<b className="text-lime">ノウハウ集</b>にたまり、CLAUDE.md や Skill として持ち帰れる！
         </p>
       </div>
 
       {/* How to play */}
       <section className="rounded-2xl border border-dashed border-line bg-panel/60 px-5 py-4" aria-labelledby="howto">
-        <h2 id="howto" className="text-sm font-bold text-muted">
-          遊び方
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="howto" className="text-sm font-bold text-muted">
+            遊び方
+          </h2>
+          <Link href="/knowhow" className="rounded-full border border-lime px-3 py-1 text-xs font-bold text-lime hover:bg-lime hover:text-white">
+            みんなのノウハウ集を見る{tipCount !== null ? `（${tipCount}件）` : ""} →
+          </Link>
+        </div>
         <ol className="mt-2 grid gap-3 sm:grid-cols-3">
           {[
-            ["小分けにして頼む", "ちびAIは少ししか話せない。1つずつ頼もう"],
-            ["答えを組み合わせる", "良い答えを「成果物に追加」で集めて完成させよう"],
-            ["点数を見て上達する", "送るたびに伝え方を下の6つの観点で採点。アドバイスで点を上げよう"],
+            ["工夫して頼む", "うまくいかなければ頼み方を変えて、もう一度。"],
+            ["効いた工夫がノウハウに", "答えが良くなった工夫を、AIが見つけて自動で保存。"],
+            ["AI適合度で振り返る", "伝え方を6つの観点で採点。ミッション達成で結果発表。"],
           ].map(([h, t], i) => (
             <li key={h} className="flex gap-2.5">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-white">
@@ -149,36 +156,40 @@ function Landing({ onPick }: { onPick: (m: Mission) => void }) {
         </div>
       </section>
 
-      {/* Difficulty select */}
+      {/* Level + mission select */}
       <section aria-labelledby="pick">
         <h2 id="pick" className="text-center text-2xl font-black">
-          難易度を選んでスタート！
+          レベルとミッションを選んでスタート！
         </h2>
-        <div className="mt-3 grid gap-4 md:grid-cols-3">
-          {MISSIONS.map((m) => {
-            const st = LEVEL_STYLE[m.level];
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          {(Object.keys(TIERS) as Tier[]).map((tier) => {
+            const t = TIERS[tier];
+            const st = TIER_STYLE[tier];
             return (
-              <button
-                key={m.id}
-                onClick={() => onPick(m)}
-                className={`group flex flex-col overflow-hidden rounded-2xl border-2 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${st.card}`}
-              >
-                <div className={`flex items-center justify-between px-4 py-2 text-white ${st.badge}`}>
-                  <span className="text-lg font-black">{m.level}</span>
-                  <span className="tracking-widest" aria-label={`難しさ ${st.stars.split("★").length - 1} / 3`}>
-                    {st.stars}
+              <div key={tier} className={`overflow-hidden rounded-2xl border-2 ${st.card}`}>
+                <div className={`flex items-baseline justify-between gap-2 px-4 py-2 text-white ${st.head}`}>
+                  <span className="text-lg font-black">{t.label}</span>
+                  <span className="text-xs">
+                    相手: {t.aiName}（{t.modelLabel}）
                   </span>
                 </div>
-                <div className="flex flex-1 flex-col gap-1 px-4 pt-3">
-                  <span className="font-bold leading-snug">{m.title}</span>
-                  <span className="flex-1 text-xs leading-relaxed text-muted">{m.short}</span>
+                <p className="px-4 pt-2 text-xs text-muted">{t.desc}</p>
+                <div className="grid gap-2 p-4 pt-2">
+                  {MISSIONS.filter((m) => m.tier === tier).map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => onPick(m)}
+                      className="group flex items-center gap-3 rounded-xl border border-line bg-panel px-3 py-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <span className="flex-1">
+                        <span className="block text-sm font-bold">{m.title}</span>
+                        <span className="block text-xs text-muted">{m.short}</span>
+                      </span>
+                      <span className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white ${st.button}`}>遊ぶ ▶</span>
+                    </button>
+                  ))}
                 </div>
-                <span
-                  className={`m-4 mt-3 rounded-xl py-2 text-center text-sm font-bold text-white transition group-hover:brightness-110 ${st.button}`}
-                >
-                  このミッションで遊ぶ ▶
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -190,6 +201,7 @@ function Landing({ onPick }: { onPick: (m: Mission) => void }) {
 /* ---------------- Play ---------------- */
 
 function Play({ mission, onExit, history }: { mission: Mission; onExit: () => void; history: Record_[] }) {
+  const tier = TIERS[mission.tier];
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [answer, setAnswer] = useState("");
@@ -210,15 +222,28 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
     const prompt = input.trim();
     if (!prompt || busy) return;
     const id = Date.now();
-    const turn = turns.length + 1;
+    const done = turns.filter((t) => t.response !== undefined).map((t) => ({ prompt: t.prompt, response: t.response! }));
     setTurns((ts) => [...ts, { id, prompt }]);
     setInput("");
     setBusy(true);
     await Promise.all([
-      post<{ text: string; truncated: boolean }>("/api/ask", { prompt })
-        .then((r) => update(id, { response: r.text, truncated: r.truncated }))
+      post<{ text: string; truncated: boolean }>("/api/ask", { prompt, tier: mission.tier, history: tier.memory ? done : [] })
+        .then((r) => {
+          update(id, { response: r.text, truncated: r.truncated });
+          // Look for a prompt tweak that improved the answer (runs in background).
+          if (done.length)
+            post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
+              missionId: mission.id,
+              previous: done.slice(-3),
+              current: { prompt, response: r.text },
+            })
+              .then((x) => {
+                if (x.found && x.knowhow) update(id, { knowhow: x.knowhow });
+              })
+              .catch(() => {});
+        })
         .catch((e) => update(id, { error: String(e.message ?? e) })),
-      post<PromptJudge>("/api/judge-prompt", { missionId: mission.id, prompt, turn })
+      post<PromptJudge>("/api/judge-prompt", { missionId: mission.id, prompt, turn: done.length + 1 })
         .then((j) => update(id, { judge: j }))
         .catch(() => {}),
     ]);
@@ -241,17 +266,10 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   };
 
   const axes = avgAxes(turns);
+  const found = turns.filter((t) => t.knowhow).map((t) => t.knowhow!);
 
   if (final) {
-    return (
-      <Result
-        mission={mission}
-        turns={turns}
-        final={final}
-        prev={history.at(-1)}
-        onRetry={onExit}
-      />
-    );
+    return <Result mission={mission} turns={turns} final={final} prev={history.at(-1)} onRetry={onExit} />;
   }
 
   return (
@@ -262,7 +280,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           ← ミッション一覧
         </button>
         <div className="rounded-2xl border border-line bg-panel p-4">
-          <span className={`rounded-full px-3 py-0.5 text-xs font-bold text-white ${LEVEL_STYLE[mission.level].badge}`}>{mission.level}</span>
+          <span className={`rounded-full px-3 py-0.5 text-xs font-bold text-white ${TIER_STYLE[mission.tier].badge}`}>{tier.label}</span>
           <h2 className="mt-2 text-lg font-bold">{mission.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">{mission.brief}</p>
           <p className="mt-4 text-xs font-bold text-lime">完成条件</p>
@@ -271,6 +289,20 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
               <li key={c}>{c}</li>
             ))}
           </ol>
+        </div>
+        <div className="rounded-2xl border border-line bg-panel p-4">
+          <p className="text-xs font-bold">見つけたノウハウ {found.length}件</p>
+          {found.length === 0 ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted">頼み方を変えて答えが良くなると、ここにたまります。</p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {found.map((k) => (
+                <li key={k.id} className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs">
+                  <b>💡 {k.title}</b>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="rounded-2xl border border-line bg-panel p-4">
           <p className="text-xs text-muted">いまのプロンプト力（平均）</p>
@@ -289,8 +321,11 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       <section className="flex min-h-[60vh] flex-col rounded-2xl border border-line bg-panel/60 lg:min-h-0">
         <header className="flex items-center justify-between border-b border-line px-4 py-3">
           <div>
-            <p className="font-bold">ちびAI</p>
-            <p className="text-xs text-muted">前回までのやり取りを把握していません · 出力{WEAK_MAX_TOKENS}トークンまで · Llama 3.1 8B</p>
+            <p className="font-bold">{tier.aiName}</p>
+            <p className="text-xs text-muted">
+              {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"} · 出力{tier.maxTokens}トークンまで ·{" "}
+              {tier.modelLabel}
+            </p>
           </div>
           <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">
             {turns.length}回目 / 目安{mission.idealPrompts}回
@@ -299,13 +334,23 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
           {turns.length === 0 && (
             <div className="rounded-xl border border-dashed border-line p-6 text-sm leading-relaxed text-muted">
-              ちびAIは前回までのやり取りを把握していません。必要な情報は毎回プロンプトに入れて渡そう。全部を一度に頼むと途中で切れます。
+              {tier.memory
+                ? "かしこAIは会話の流れを覚えています。答えがいまいちなら、どこをどう直してほしいか伝えてみよう。"
+                : "ちびAIは前回までのやり取りを把握していません。必要な情報は毎回プロンプトに入れて渡そう。全部を一度に頼むと途中で切れます。"}
               <br />
-              まずは完成条件のうち1つだけを、形式を指定して頼んでみよう。
+              うまくいかなかったら頼み方を変えて再挑戦。答えが良くなった工夫は<b className="text-foreground">ノウハウとして保存</b>されます。
             </div>
           )}
           {turns.map((t, i) => (
-            <TurnView key={t.id} turn={t} n={i + 1} onQuote={quote} onAdd={(s) => setAnswer((a) => `${a}${a ? "\n\n" : ""}${s.trim()}`)} onRetry={(p) => setInput(p)} />
+            <TurnView
+              key={t.id}
+              turn={t}
+              n={i + 1}
+              aiName={tier.aiName}
+              onQuote={tier.memory ? undefined : quote}
+              onAdd={(s) => setAnswer((a) => `${a}${a ? "\n\n" : ""}${s.trim()}`)}
+              onRetry={(p) => setInput(p)}
+            />
           ))}
           <div ref={bottom} />
         </div>
@@ -318,7 +363,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
             }}
             rows={4}
-            placeholder="ちびAIへのプロンプト（Ctrl+Enterで送信）"
+            placeholder={`${tier.aiName}へのプロンプト（Ctrl+Enterで送信）`}
             className="w-full resize-y rounded-xl border border-line bg-background p-3 text-sm outline-none focus:border-lime"
           />
           <div className="mt-2 flex items-center justify-between">
@@ -339,7 +384,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       {/* Answer */}
       <section className="flex flex-col rounded-2xl border border-line bg-panel p-4">
         <p className="font-bold">成果物</p>
-        <p className="text-xs text-muted">AIの出力を「成果物に追加」で集め、自由に編集して提出。</p>
+        <p className="text-xs text-muted">AIの答えを「成果物に追加」で集め、自由に編集して提出。</p>
         <textarea
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
@@ -366,13 +411,15 @@ function ScoreBadge({ score }: { score: number }) {
 function TurnView({
   turn,
   n,
+  aiName,
   onQuote,
   onAdd,
   onRetry,
 }: {
   turn: Turn;
   n: number;
-  onQuote: (s: string) => void;
+  aiName: string;
+  onQuote?: (s: string) => void;
   onAdd: (s: string) => void;
   onRetry: (s: string) => void;
 }) {
@@ -422,7 +469,7 @@ function TurnView({
         )}
       </div>
       <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-line/60 p-3">
-        <p className="mb-1 text-xs text-muted">ちびAI</p>
+        <p className="mb-1 text-xs text-muted">{aiName}</p>
         {turn.error ? (
           <p className="text-sm text-red-600">エラー: {turn.error}</p>
         ) : turn.response === undefined ? (
@@ -432,16 +479,25 @@ function TurnView({
             <p className="whitespace-pre-wrap text-sm">{turn.response}</p>
             {turn.truncated && <p className="mt-1 text-xs text-amber-600">⚠ 出力上限で途中で切れました。頼む量を減らそう。</p>}
             <div className="mt-2 flex gap-2">
-              <button onClick={() => onAdd(turn.response!)} className="rounded-lg bg-violet/30 px-2 py-1 text-xs hover:bg-violet/50">
+              <button onClick={() => onAdd(turn.response!)} className="rounded-lg bg-violet/20 px-2 py-1 text-xs hover:bg-violet/30">
                 成果物に追加
               </button>
-              <button onClick={() => onQuote(turn.response!)} className="rounded-lg border border-line px-2 py-1 text-xs hover:border-lime">
-                次のプロンプトに資料として貼る
-              </button>
+              {onQuote && (
+                <button onClick={() => onQuote(turn.response!)} className="rounded-lg border border-line px-2 py-1 text-xs hover:border-lime">
+                  次のプロンプトに資料として貼る
+                </button>
+              )}
             </div>
           </>
         )}
       </div>
+      {turn.knowhow && (
+        <div className="max-w-[90%] rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-sm">
+          <p className="font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
+          <p className="mt-1">{turn.knowhow.tip}</p>
+          <p className="mt-1 text-xs text-muted">効いた理由: {turn.knowhow.why} · みんなのノウハウ集に保存しました</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -469,6 +525,7 @@ function Result({
   const rank = rankOf(total);
   const axes = avgAxes(turns);
   const weakest = axes ? AXES.reduce((w, a) => (axes[a.key] < axes[w.key] ? a : w)) : null;
+  const found = turns.filter((t) => t.knowhow).map((t) => t.knowhow!);
   const saved = useRef(false);
 
   useEffect(() => {
@@ -479,7 +536,9 @@ function Result({
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10">
-      <p className="text-sm text-muted">{mission.title} · 結果</p>
+      <p className="text-sm text-muted">
+        {TIERS[mission.tier].label} · {mission.title} · 結果
+      </p>
       <div className="mt-4 grid items-center gap-8 md:grid-cols-[1fr_320px]">
         <div>
           <p className="text-sm text-muted">あなたの AI適合度</p>
@@ -520,8 +579,29 @@ function Result({
         )}
       </div>
 
+      <section className="mt-8 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-lg font-bold">💡 あなたが見つけたノウハウ {found.length}件</p>
+          <Link href="/knowhow" className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-bold text-white">
+            みんなのノウハウ集へ →
+          </Link>
+        </div>
+        {found.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">今回は見つかりませんでした。答えがいまいちなとき、頼み方を変えて再挑戦するとノウハウが生まれます。</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {found.map((k) => (
+              <li key={k.id} className="rounded-xl bg-panel p-3 text-sm">
+                <b>{k.title}</b>
+                <span className="block">{k.tip}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {weakest && axes && (
-        <div className="mt-8 rounded-2xl border border-violet bg-violet/10 p-5">
+        <div className="mt-6 rounded-2xl border border-violet bg-violet/10 p-5">
           <p className="text-sm text-violet">次に化けるポイント</p>
           <p className="mt-1 text-xl font-bold">
             「{weakest.label}」を伸ばそう（平均 {axes[weakest.key].toFixed(1)} / 5）
@@ -531,7 +611,7 @@ function Result({
         </div>
       )}
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
         <section className="rounded-2xl border border-line bg-panel p-5">
           <p className="font-bold">
             完成条件 {passed} / {mission.checklist.length}
