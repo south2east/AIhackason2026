@@ -12,11 +12,13 @@ import {
   rankOf,
   totalScore,
   type AxisScores,
+  type Coach,
   type FinalJudge,
   type Knowhow,
   type Mission,
   type PromptJudge,
   type Tier,
+  type Tip,
 } from "@/lib/game";
 
 type Turn = {
@@ -25,6 +27,7 @@ type Turn = {
   response?: string;
   truncated?: boolean;
   judge?: PromptJudge;
+  coach?: Coach;
   knowhow?: Knowhow;
   error?: string;
 };
@@ -202,7 +205,10 @@ function Landing({ onPick, tipCount }: { onPick: (m: Mission) => void; tipCount:
 
 function Play({ mission, onExit, history }: { mission: Mission; onExit: () => void; history: Record_[] }) {
   const tier = TIERS[mission.tier];
+  const advanced = mission.tier === "advanced";
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [tips, setTips] = useState<Tip[]>([]);
+  const [openTip, setOpenTip] = useState<Tip | null>(null);
   const [input, setInput] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
@@ -215,6 +221,16 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns.length]);
+
+  useEffect(() => {
+    if (!advanced) return;
+    fetch("/api/tips")
+      .then((r) => r.json())
+      .then((d) => setTips(d.tips ?? []))
+      .catch(() => {});
+  }, [advanced]);
+
+  const showTip = (id: string) => setOpenTip(tips.find((t) => t.id === id) ?? null);
 
   const update = (id: number, patch: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
@@ -230,8 +246,9 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       post<{ text: string; truncated: boolean }>("/api/ask", { prompt, tier: mission.tier, history: tier.memory ? done : [] })
         .then((r) => {
           update(id, { response: r.text, truncated: r.truncated });
-          // Look for a prompt tweak that improved the answer (runs in background).
-          if (done.length)
+          // Beginner: look for a prompt tweak that improved the answer (runs in background).
+          // Advanced: the coach looks for new techniques instead.
+          if (!advanced && done.length)
             post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
               missionId: mission.id,
               previous: done.slice(-3),
@@ -243,9 +260,13 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
               .catch(() => {});
         })
         .catch((e) => update(id, { error: String(e.message ?? e) })),
-      post<PromptJudge>("/api/judge-prompt", { missionId: mission.id, prompt, turn: done.length + 1 })
-        .then((j) => update(id, { judge: j }))
-        .catch(() => {}),
+      advanced
+        ? post<Coach>("/api/coach", { missionId: mission.id, prompt, history: done.slice(-3) })
+            .then((c) => update(id, { coach: c, knowhow: c.novel }))
+            .catch(() => {})
+        : post<PromptJudge>("/api/judge-prompt", { missionId: mission.id, prompt, turn: done.length + 1 })
+            .then((j) => update(id, { judge: j }))
+            .catch(() => {}),
     ]);
     setBusy(false);
   }
@@ -304,6 +325,9 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
             </ul>
           )}
         </div>
+        {advanced ? (
+          <TipsPanel turns={turns} tips={tips} onOpen={showTip} />
+        ) : (
         <div className="rounded-2xl border border-line bg-panel p-4">
           <p className="text-xs text-muted">いまのプロンプト力（平均）</p>
           {axes ? (
@@ -315,6 +339,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           )}
           {history.at(-1) && <p className="text-center text-xs text-violet">点線 = 前回のあなた</p>}
         </div>
+        )}
       </aside>
 
       {/* Chat */}
@@ -350,6 +375,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
               onQuote={tier.memory ? undefined : quote}
               onAdd={(s) => setAnswer((a) => `${a}${a ? "\n\n" : ""}${s.trim()}`)}
               onRetry={(p) => setInput(p)}
+              onOpenTip={showTip}
             />
           ))}
           <div ref={bottom} />
@@ -399,6 +425,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           {submitting ? "審査中…" : "提出して AI適合度 を見る"}
         </button>
       </section>
+      {openTip && <TipModal tip={openTip} onClose={() => setOpenTip(null)} />}
     </main>
   );
 }
@@ -415,6 +442,7 @@ function TurnView({
   onQuote,
   onAdd,
   onRetry,
+  onOpenTip,
 }: {
   turn: Turn;
   n: number;
@@ -422,17 +450,26 @@ function TurnView({
   onQuote?: (s: string) => void;
   onAdd: (s: string) => void;
   onRetry: (s: string) => void;
+  onOpenTip: (id: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const j = turn.judge;
+  const c = turn.coach;
   return (
     <div className="space-y-2">
       <div className="ml-auto max-w-[90%] rounded-2xl rounded-tr-sm border border-line bg-background p-3">
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="text-xs text-muted">あなた · {n}回目</span>
-          {j ? <ScoreBadge score={promptScore(j)} /> : <span className="text-xs text-muted">採点中…</span>}
+          {j ? (
+            <ScoreBadge score={promptScore(j)} />
+          ) : c ? (
+            <ScoreBadge score={c.score} />
+          ) : (
+            <span className="text-xs text-muted">採点中…</span>
+          )}
         </div>
         <p className="whitespace-pre-wrap text-sm">{turn.prompt}</p>
+        {c && <CoachView coach={c} onOpenTip={onOpenTip} />}
         {j && (
           <div className="mt-3 border-t border-line pt-2">
             <div className="grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-6">
@@ -495,7 +532,10 @@ function TurnView({
         <div className="max-w-[90%] rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-sm">
           <p className="font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
           <p className="mt-1">{turn.knowhow.tip}</p>
-          <p className="mt-1 text-xs text-muted">効いた理由: {turn.knowhow.why} · みんなのノウハウ集に保存しました</p>
+          <p className="mt-1 text-xs text-muted">
+            効いた理由: {turn.knowhow.why} ·{" "}
+            {turn.coach && !turn.coach.novelSaved ? "保存できませんでした（ストレージ未設定）" : "みんなのノウハウ集に保存しました"}
+          </p>
         </div>
       )}
     </div>
@@ -517,8 +557,9 @@ function Result({
   prev?: Record_;
   onRetry: () => void;
 }) {
-  const judged = turns.filter((t) => t.judge);
-  const promptAvg = judged.length ? Math.round(judged.reduce((s, t) => s + promptScore(t.judge!), 0) / judged.length) : 0;
+  const scoreOf = (t: Turn) => (t.judge ? promptScore(t.judge) : (t.coach?.score ?? 0));
+  const judged = turns.filter((t) => t.judge || t.coach);
+  const promptAvg = judged.length ? Math.round(judged.reduce((s, t) => s + scoreOf(t), 0) / judged.length) : 0;
   const passed = final.items.filter((i) => i.passed).length;
   const achievement = Math.round((passed / mission.checklist.length) * 100);
   const { efficiency, total } = totalScore(promptAvg, achievement, turns.length, mission.idealPrompts);
@@ -637,7 +678,7 @@ function Result({
           <p className="font-bold">プロンプトの成長</p>
           <div className="mt-4 flex items-end gap-2">
             {judged.map((t, i) => {
-              const s = promptScore(t.judge!);
+              const s = scoreOf(t);
               return (
                 <div key={t.id} className="flex flex-1 flex-col items-center gap-1">
                   <span className="text-xs">{s}</span>
@@ -661,5 +702,105 @@ function Result({
         </button>
       </div>
     </main>
+  );
+}
+
+/* ---------------- Advanced: coach and tips ---------------- */
+
+function CoachView({ coach, onOpenTip }: { coach: Coach; onOpenTip: (id: string) => void }) {
+  return (
+    <div className="mt-3 space-y-2 border-t border-line pt-2 text-xs leading-relaxed">
+      <p className="font-bold text-violet">コーチ{coach.demo ? "（デモ）" : ""}</p>
+      {coach.matched.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {coach.matched.map((m) => (
+            <span key={m.name} title={m.source} className="rounded-full bg-lime/10 px-2 py-0.5 font-bold text-lime">
+              ✔ {m.name}
+            </span>
+          ))}
+        </div>
+      )}
+      <p>
+        <span className="text-violet">↑</span> {coach.advice}
+      </p>
+      {coach.recommend.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-muted">このTipsを使うともっと良くなる</p>
+          {coach.recommend.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => onOpenTip(r.id)}
+              className="block w-full rounded-lg border border-violet/30 bg-violet/5 px-2 py-1.5 text-left hover:border-violet"
+            >
+              <b>📘 {r.title}</b>
+              <span className="block text-muted">{r.reason}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Tip[]; onOpen: (id: string) => void }) {
+  const latest = [...turns].reverse().find((t) => t.coach)?.coach;
+  const scores = turns.filter((t) => t.coach).map((t) => t.coach!.score);
+  return (
+    <>
+      <div className="rounded-2xl border border-line bg-panel p-4">
+        <p className="text-xs text-muted">使いこなし度の推移</p>
+        {scores.length ? (
+          <p className="mt-1 text-sm font-bold">{scores.join(" → ")}</p>
+        ) : (
+          <p className="mt-1 text-sm text-muted">最初のプロンプトを送ると表示されます。</p>
+        )}
+      </div>
+      <div className="rounded-2xl border border-line bg-panel p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold">Tips集（{tips.length}件）</p>
+          <Link href="/knowhow" className="text-xs text-violet">
+            一覧 →
+          </Link>
+        </div>
+        <ul className="mt-2 space-y-1">
+          {tips.map((t) => {
+            const rec = latest?.recommend.some((r) => r.id === t.id);
+            return (
+              <li key={t.id}>
+                <button
+                  onClick={() => onOpen(t.id)}
+                  className={`w-full rounded-lg px-2 py-1 text-left text-xs hover:bg-background ${rec ? "bg-violet/10 font-bold text-violet" : ""}`}
+                >
+                  {rec ? "★ " : ""}
+                  {t.title}
+                  <span className="ml-1 text-[10px] text-muted">{t.kind}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+function TipModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-panel p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-bold text-violet">{tip.kind}</span>
+            <h3 className="mt-1 text-lg font-bold">{tip.title}</h3>
+          </div>
+          <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="閉じる">
+            ✕
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-muted">使う場面: {tip.when}</p>
+        <p className="whitespace-pre-wrap pt-3 text-sm leading-relaxed">{tip.body.replace(/\*\*(.+?)\*\*/g, "$1")}</p>
+        <p className="mt-3 text-[11px] text-muted">出典: {tip.source}</p>
+      </div>
+    </div>
   );
 }

@@ -10,7 +10,7 @@ export const TIERS: Record<
   { label: string; aiName: string; model: string; modelLabel: string; maxTokens: number; memory: boolean; desc: string }
 > = {
   beginner: {
-    label: "初心者",
+    label: "初級者",
     aiName: "ちびAI",
     model: "meta/llama-3.1-8b",
     modelLabel: "Llama 3.1 8B",
@@ -21,11 +21,11 @@ export const TIERS: Record<
   advanced: {
     label: "上級者",
     aiName: "かしこAI",
-    model: "anthropic/claude-haiku-5.5",
-    modelLabel: "Claude Haiku 5.5",
-    maxTokens: 1200,
+    model: "anthropic/claude-sonnet-5.5",
+    modelLabel: "Claude Sonnet 5.5",
+    maxTokens: 2000,
     memory: true,
-    desc: "会話の流れを覚えていて、長く話せるAI。そのぶん求められる質も高い",
+    desc: "会話を覚えている賢いAIと自由に対話。頼み方をコーチが見て、使えるTipsを教えてくれる",
   },
 };
 
@@ -55,22 +55,6 @@ export const MISSIONS: Mission[] = [
       "告知文（100字以内。イベント名と日時を含む）",
     ],
     idealPrompts: 4,
-  },
-  {
-    id: "lp",
-    title: "新商品「AI枕」の宣伝文をつくろう",
-    tier: "beginner",
-    short: "キャッチコピー・おすすめポイント・よくある質問をそろえる",
-    brief:
-      "睡眠を記録して最適な高さに自動調整する架空のAI枕「ネムール」（税込19,800円）の宣伝ページに載せる文章を完成させる。",
-    checklist: [
-      "キャッチコピー（20字以内）",
-      "どんな人向けか（年齢層と、睡眠の具体的な悩み）",
-      "おすすめポイント3つ（それぞれ見出しと説明文）",
-      "よくある質問3つ（質問と答えのセット）",
-      "全体のつじつま（向けている人の悩みとおすすめポイントが対応していて、価格の表記が正しい）",
-    ],
-    idealPrompts: 5,
   },
   {
     id: "kyoto",
@@ -194,3 +178,26 @@ export type Knowhow = {
 };
 
 export const rankOf = (score: number) => RANKS.find((r) => score >= r.min)!;
+
+/* ---------------- Advanced: tips and coach ---------------- */
+
+// A curated tip stored as web/tips/<id>.md (frontmatter + body).
+export type Tip = {
+  id: string;
+  title: string;
+  kind: "公式" | "実践";
+  source: string;
+  when: string;
+  body: string;
+};
+
+// The coach's review of one prompt in advanced mode.
+export type Coach = {
+  score: number; // 0-100
+  matched: { name: string; source: string }[];
+  advice: string;
+  recommend: { id: string; title: string; reason: string }[];
+  novel?: Knowhow;
+  novelSaved?: boolean;
+  demo?: boolean;
+};
