@@ -25,7 +25,7 @@ export const TIERS: Record<
     modelLabel: "Claude Sonnet 5.5",
     maxTokens: 2000,
     memory: true,
-    desc: "会話を覚えている賢いAIと自由に対話。頼み方をコーチが見て、使えるTipsを教えてくれる",
+    desc: "会話を覚えている賢いAIと自由に対話。頼み方をコーチが見て、使えるノウハウを教えてくれる",
   },
 };
 
