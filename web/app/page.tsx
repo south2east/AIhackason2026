@@ -101,90 +101,86 @@ const LEVEL_STYLE: Record<Mission["level"], { card: string; badge: string; butto
 
 function Landing({ onPick }: { onPick: (m: Mission) => void }) {
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center gap-6 px-4 py-6">
       <div className="text-center">
-        <p className="text-sm tracking-widest text-muted">BAKERU — プロンプト変身トレーニング</p>
-        <h1 className="mt-3 text-3xl font-black leading-tight sm:text-6xl">
+        <p className="text-xs tracking-widest text-muted">BAKERU — プロンプト変身トレーニング</p>
+        <h1 className="mt-2 text-3xl font-black leading-tight sm:text-5xl">
           AIは毎月化けている。
           <br />
           <span className="glow">次は人が化ける番だ！</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted">
+        <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted">
           相手は<b className="text-foreground">記憶なし・少ししか話せないちびAI</b>！
           <br className="hidden sm:block" />
           うまくミッションをクリアして、<b className="text-lime">AIと仲良くできる聞き方</b>を見つけよう！
         </p>
       </div>
 
+      {/* How to play */}
+      <section className="rounded-2xl border border-dashed border-line bg-panel/60 px-5 py-4" aria-labelledby="howto">
+        <h2 id="howto" className="text-sm font-bold text-muted">
+          遊び方
+        </h2>
+        <ol className="mt-2 grid gap-3 sm:grid-cols-3">
+          {[
+            ["小分けにして頼む", "ちびAIは少ししか話せない。1つずつ頼もう"],
+            ["答えを組み合わせる", "良い答えを「成果物に追加」で集めて完成させよう"],
+            ["点数を見て上達する", "送るたびに伝え方を下の6つの観点で採点。アドバイスで点を上げよう"],
+          ].map(([h, t], i) => (
+            <li key={h} className="flex gap-2.5">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-white">
+                {i + 1}
+              </span>
+              <div>
+                <p className="text-sm font-bold">{h}</p>
+                <p className="text-xs leading-relaxed text-muted">{t}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
+          <span className="mr-1 text-xs font-bold">採点の観点</span>
+          {AXES.map((a) => (
+            <span key={a.key} title={a.desc} className="rounded-full bg-background px-2.5 py-0.5 text-xs font-bold text-lime">
+              {a.label}
+            </span>
+          ))}
+          <span className="ml-auto text-[11px] text-muted">Anthropic / OpenAI のプロンプトガイドにもとづく</span>
+        </div>
+      </section>
+
       {/* Difficulty select */}
-      <section className="mt-12" aria-labelledby="pick">
-        <h2 id="pick" className="text-center text-2xl font-black sm:text-3xl">
+      <section aria-labelledby="pick">
+        <h2 id="pick" className="text-center text-2xl font-black">
           難易度を選んでスタート！
         </h2>
-        <p className="mt-1 text-center text-sm text-muted">遊びたいミッションのカードを押してください</p>
-        <div className="mt-6 grid gap-5 md:grid-cols-3">
+        <div className="mt-3 grid gap-4 md:grid-cols-3">
           {MISSIONS.map((m) => {
             const st = LEVEL_STYLE[m.level];
             return (
               <button
                 key={m.id}
                 onClick={() => onPick(m)}
-                className={`group flex flex-col overflow-hidden rounded-3xl border-2 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${st.card}`}
+                className={`group flex flex-col overflow-hidden rounded-2xl border-2 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl ${st.card}`}
               >
-                <div className={`flex items-center justify-between px-5 py-3 text-white ${st.badge}`}>
-                  <span className="text-xl font-black">{m.level}</span>
-                  <span className="text-lg tracking-widest" aria-label={`難しさ ${st.stars.split("★").length - 1} / 3`}>
+                <div className={`flex items-center justify-between px-4 py-2 text-white ${st.badge}`}>
+                  <span className="text-lg font-black">{m.level}</span>
+                  <span className="tracking-widest" aria-label={`難しさ ${st.stars.split("★").length - 1} / 3`}>
                     {st.stars}
                   </span>
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-5">
-                  <span className="text-lg font-bold leading-snug">{m.title}</span>
-                  <span className="flex-1 text-sm leading-relaxed text-muted">{m.short}</span>
+                <div className="flex flex-1 flex-col gap-1 px-4 pt-3">
+                  <span className="font-bold leading-snug">{m.title}</span>
+                  <span className="flex-1 text-xs leading-relaxed text-muted">{m.short}</span>
                 </div>
                 <span
-                  className={`mx-5 mb-5 rounded-xl py-2.5 text-center font-bold text-white transition group-hover:brightness-110 ${st.button}`}
+                  className={`m-4 mt-3 rounded-xl py-2 text-center text-sm font-bold text-white transition group-hover:brightness-110 ${st.button}`}
                 >
                   このミッションで遊ぶ ▶
                 </span>
               </button>
             );
           })}
-        </div>
-      </section>
-
-      {/* How to play */}
-      <section className="mt-16 rounded-3xl border border-dashed border-line bg-panel/60 p-6 sm:p-8" aria-labelledby="howto">
-        <h2 id="howto" className="text-lg font-bold">
-          遊び方
-        </h2>
-        <ol className="mt-4 grid gap-4 sm:grid-cols-3">
-          {[
-            ["小分けにして頼む", "ちびAIは一度に少ししか話せません。「名前だけ」「予算だけ」のように、1つずつ頼もう。"],
-            ["答えを組み合わせる", "良い答えは「成果物に追加」で集めよう。前の答えを次の質問に貼って渡すこともできます。"],
-            ["点数を見て上達する", "質問を送るたびに、伝え方を下の6つの観点で採点。アドバイスを試して点を上げよう。"],
-          ].map(([h, t], i) => (
-            <li key={h} className="flex gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-white">
-                {i + 1}
-              </span>
-              <div>
-                <p className="font-bold">{h}</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted">{t}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-6 border-t border-line pt-5">
-          <p className="text-sm font-bold">採点の6つの観点</p>
-          <ul className="mt-3 grid gap-2 sm:grid-cols-3">
-            {AXES.map((a) => (
-              <li key={a.key} className="rounded-xl bg-background px-3 py-2">
-                <span className="text-sm font-bold text-lime">{a.label}</span>
-                <span className="block text-xs leading-relaxed text-muted">{a.desc}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-muted">観点は Anthropic と OpenAI が公開しているプロンプトの書き方ガイドにもとづいています。</p>
         </div>
       </section>
     </main>
