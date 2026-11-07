@@ -37,6 +37,7 @@ export type Mission = {
   brief: string;
   checklist: string[];
   idealPrompts: number;
+  examples: { label: string; prompt: string }[];
 };
 
 export const MISSIONS: Mission[] = [
@@ -55,22 +56,14 @@ export const MISSIONS: Mission[] = [
       "告知文（100字以内。イベント名と日時を含む）",
     ],
     idealPrompts: 4,
-  },
-  {
-    id: "kyoto",
-    title: "3万円で京都1泊2日の旅を計画しよう",
-    tier: "advanced",
-    short: "行き先・移動手段・費用の計算までそろえた旅行プランをつくる",
-    brief:
-      "東京から京都へ大学生2人で行く1泊2日の旅行プランを、1人あたり総額3万円以内（交通費・宿・食費・拝観料込み）で完成させる。",
-    checklist: [
-      "2日分の行程（時刻付き、各日3か所以上）",
-      "各移動の手段が書かれている",
-      "1人あたりの費用内訳と合計（3万円以内で、足し算が正しい）",
-      "雨の日の代替プラン",
-      "持ち物リスト（5つ以上）",
+    examples: [
+      { label: "① まず雑に頼む", prompt: "イベント名を考えて" },
+      {
+        label: "② 工夫して頼み直す",
+        prompt:
+          "<条件>大学のAI研究サークルの新入生歓迎イベント。初心者の新入生が気軽に来たくなる雰囲気</条件>\nイベント名を1つだけ、20字以内で決めて。名前だけを1行で出力して。",
+      },
     ],
-    idealPrompts: 6,
   },
   {
     id: "guideline",
@@ -87,6 +80,14 @@ export const MISSIONS: Mission[] = [
       "全体で1200字以内に収まっている",
     ],
     idealPrompts: 5,
+    examples: [
+      { label: "① まず雑に頼む", prompt: "AIのルールを作って" },
+      {
+        label: "② 工夫して頼み直す",
+        prompt:
+          "<目的>AIを使ったことがない新入社員に配る1枚のルール</目的>\n<条件>\n- 禁止事項を5つ、それぞれ理由を一言\n- OK例とNG例のペアを3組（入力文の例つき）\n- 迷ったときの判断手順を3ステップ\n- 専門用語には言い換えをつける\n- 全体1200字以内\n</条件>\n見出しつきのMarkdownで書いて。",
+      },
+    ],
   },
 ];
 
