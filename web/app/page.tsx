@@ -110,7 +110,7 @@ function Landing({ onPick }: { onPick: (m: Mission) => void }) {
           <span className="glow">次は人が化ける番だ！</span>
         </h1>
         <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted">
-          相手は<b className="text-foreground">記憶なし・少ししか話せないちびAI</b>！
+          相手は<b className="text-foreground">前回までのやり取りを把握していない、少ししか話せないちびAI</b>！
           <br className="hidden sm:block" />
           うまくミッションをクリアして、<b className="text-lime">AIと仲良くできる聞き方</b>を見つけよう！
         </p>
@@ -290,7 +290,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         <header className="flex items-center justify-between border-b border-line px-4 py-3">
           <div>
             <p className="font-bold">ちびAI</p>
-            <p className="text-xs text-muted">記憶なし · 出力{WEAK_MAX_TOKENS}トークンまで · Llama 3.1 8B</p>
+            <p className="text-xs text-muted">前回までのやり取りを把握していません · 出力{WEAK_MAX_TOKENS}トークンまで · Llama 3.1 8B</p>
           </div>
           <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">
             {turns.length}回目 / 目安{mission.idealPrompts}回
@@ -299,7 +299,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
           {turns.length === 0 && (
             <div className="rounded-xl border border-dashed border-line p-6 text-sm leading-relaxed text-muted">
-              ちびAIは前の会話を覚えていません。全部を一度に頼むと途中で切れます。
+              ちびAIは前回までのやり取りを把握していません。必要な情報は毎回プロンプトに入れて渡そう。全部を一度に頼むと途中で切れます。
               <br />
               まずは完成条件のうち1つだけを、形式を指定して頼んでみよう。
             </div>
