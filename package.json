@@ -1,0 +1,11 @@
+{
+  "name": "aihackason2026",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "marked": "15.0.12"
+  }
+}
