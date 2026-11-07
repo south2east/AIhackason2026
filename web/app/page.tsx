@@ -218,18 +218,21 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
 
   const update = (id: number, patch: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
-  async function send() {
-    const prompt = input.trim();
-    if (!prompt || busy) return;
+  // Completed exchanges, kept in a ref so the auto-demo loop sees fresh values.
+  const doneRef = useRef<{ prompt: string; response: string }[]>([]);
+  const [auto, setAuto] = useState<{ step: number; total: number } | null>(null);
+
+  async function ask(prompt: string): Promise<string | undefined> {
     const id = Date.now();
-    const done = turns.filter((t) => t.response !== undefined).map((t) => ({ prompt: t.prompt, response: t.response! }));
+    const done = doneRef.current;
     setTurns((ts) => [...ts, { id, prompt }]);
-    setInput("");
-    setBusy(true);
+    let response: string | undefined;
     await Promise.all([
       post<{ text: string; truncated: boolean }>("/api/ask", { prompt, tier: mission.tier, history: tier.memory ? done : [] })
         .then((r) => {
+          response = r.text;
           update(id, { response: r.text, truncated: r.truncated });
+          doneRef.current = [...doneRef.current, { prompt, response: r.text }];
           // Look for a prompt tweak that improved the answer (runs in background).
           if (done.length)
             post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
@@ -247,17 +250,48 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         .then((j) => update(id, { judge: j }))
         .catch(() => {}),
     ]);
+    return response;
+  }
+
+  async function send() {
+    const prompt = input.trim();
+    if (!prompt || busy) return;
+    setInput("");
+    setBusy(true);
+    await ask(prompt);
     setBusy(false);
   }
 
-  async function submit() {
-    if (!answer.trim() || submitting) return;
+  async function submit(text = answer) {
+    if (!text.trim() || submitting) return;
     setSubmitting(true);
     try {
-      setFinal(await post<FinalJudge>("/api/judge-final", { missionId: mission.id, answer }));
+      setFinal(await post<FinalJudge>("/api/judge-final", { missionId: mission.id, answer: text }));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Auto-demo: plays the scripted rally against the real AI, collects answers, then submits.
+  async function autoRun() {
+    if (busy || auto) return;
+    setBusy(true);
+    const answers: string[] = [];
+    let built = answer;
+    for (const [i, step] of mission.rally.entries()) {
+      setAuto({ step: i + 1, total: mission.rally.length });
+      const prompt = step.prompt.replace(/\{\{r(\d+)\}\}/g, (_, n) => (answers[Number(n) - 1] ?? "").trim());
+      const r = (await ask(prompt)) ?? "";
+      answers.push(r);
+      if (step.add === "append") built = `${built}${built ? "\n\n" : ""}${r.trim()}`;
+      if (step.add === "replace") built = r.trim();
+      setAnswer(built);
+    }
+    // Give the know-how extractor a moment to report before leaving the play screen.
+    await new Promise((res) => setTimeout(res, 9000));
+    setAuto(null);
+    setBusy(false);
+    await submit(built);
   }
 
   const quote = (text: string) => {
@@ -300,7 +334,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Chat */}
-        <section className="flex h-[85vh] min-h-[560px] flex-col rounded-2xl border border-line bg-panel shadow-sm">
+        <section className="flex h-[calc(100vh-2rem)] min-h-[600px] flex-col rounded-2xl border border-line bg-panel shadow-sm">
           <div className="border-b border-line px-5 py-3">
             <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
             <p className="text-sm text-muted">
@@ -330,7 +364,14 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           </div>
           <div className="border-t border-line p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-muted">お試しプロンプト:</span>
+              <button
+                onClick={autoRun}
+                disabled={busy}
+                className="rounded-full bg-amber-400 px-4 py-1 text-sm font-black text-foreground shadow-sm hover:brightness-105 disabled:opacity-50"
+              >
+                {auto ? `自動プレイ中… ${auto.step}/${auto.total}` : "▶ 自動で完成までやってみる（デモ）"}
+              </button>
+              <span className="text-sm font-bold text-muted">お試し:</span>
               {mission.examples.map((ex) => (
                 <button
                   key={ex.label}
@@ -351,7 +392,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
               }}
-              rows={3}
+              rows={2}
               placeholder={`${tier.aiName}へのお願いを書く（Ctrl+Enterで送信）`}
               className="w-full resize-y rounded-xl border-2 border-line bg-background p-3 text-base outline-none focus:border-lime"
             />
@@ -368,9 +409,19 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </section>
 
         {/* Answer */}
-        <section className="flex h-[85vh] min-h-[560px] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm">
-          <p className="text-lg font-bold">② 提出するもの</p>
-          <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
+        <section className="flex h-[calc(100vh-2rem)] min-h-[600px] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-lg font-bold">② 提出するもの</p>
+              <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
+            </div>
+            <button
+              onClick={() => setAnswer(mission.sample)}
+              className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:border-violet hover:text-violet"
+            >
+              完成例を入れる（デモ用）
+            </button>
+          </div>
           <textarea
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -378,7 +429,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
             placeholder="ここに完成品を組み立てる"
           />
           <button
-            onClick={submit}
+            onClick={() => submit()}
             disabled={submitting || !answer.trim() || turns.length === 0}
             className="mt-3 rounded-xl bg-violet px-5 py-3 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
           >
