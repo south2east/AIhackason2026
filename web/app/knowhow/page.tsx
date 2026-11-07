@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AXES, MISSIONS, TIERS, type Knowhow, type Tier, type Tip } from "@/lib/game";
+import { AXES, MISSIONS, TIERS, type Knowhow, type Tier } from "@/lib/game";
 
 type Filter = "all" | Tier;
 type Exported = { filename: string; content: string; count: number };
 
 export default function KnowhowPage() {
   const [items, setItems] = useState<Knowhow[] | null>(null);
-  const [tips, setTips] = useState<Tip[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -21,10 +20,6 @@ export default function KnowhowPage() {
       .then((r) => r.json())
       .then((d) => setItems(d.items ?? []))
       .catch(() => setItems([]));
-    fetch("/api/tips")
-      .then((r) => r.json())
-      .then((d) => setTips(d.tips ?? []))
-      .catch(() => {});
   }, []);
 
   const shown = useMemo(() => (items ?? []).filter((k) => filter === "all" || k.tier === filter), [items, filter]);
@@ -79,31 +74,7 @@ export default function KnowhowPage() {
         プレイヤーが頼み方を工夫して、AIの答えが実際に良くなった方法だけを集めています。選んで CLAUDE.md や Skill として持ち帰れます。
       </p>
 
-      {tips.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-lg font-bold">
-            Tips集 <span className="text-sm font-normal text-muted">AIのテクニカルな使い方（web/tips/*.md）</span>
-          </h2>
-          <ul className="mt-3 grid gap-3 md:grid-cols-2">
-            {tips.map((t) => (
-              <li key={t.id} id={t.id}>
-                <details className="h-full rounded-2xl border border-line bg-panel p-4 shadow-sm">
-                  <summary className="cursor-pointer">
-                    <span className="mr-2 rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-bold text-violet">{t.kind}</span>
-                    <b>{t.title}</b>
-                    <span className="mt-1 block text-xs text-muted">使う場面: {t.when}</span>
-                  </summary>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{t.body.replace(/\*\*(.+?)\*\*/g, "$1")}</p>
-                  <p className="mt-2 text-[11px] text-muted">出典: {t.source}</p>
-                </details>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <h2 className="mt-10 text-lg font-bold">みんなが見つけたノウハウ</h2>
-      <div className="sticky top-0 z-10 mt-2 flex flex-wrap items-center gap-2 border-b border-line bg-background/90 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 mt-6 flex flex-wrap items-center gap-2 border-b border-line bg-background/90 py-3 backdrop-blur">
         {(["all", "beginner", "advanced"] as Filter[]).map((f) => (
           <button
             key={f}

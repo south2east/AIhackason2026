@@ -18,7 +18,6 @@ import {
   type Mission,
   type PromptJudge,
   type Tier,
-  type Tip,
 } from "@/lib/game";
 
 type Turn = {
@@ -207,8 +206,8 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   const tier = TIERS[mission.tier];
   const advanced = mission.tier === "advanced";
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [tips, setTips] = useState<Tip[]>([]);
-  const [openTip, setOpenTip] = useState<Tip | null>(null);
+  const [tips, setTips] = useState<Knowhow[]>([]);
+  const [openTip, setOpenTip] = useState<Knowhow | null>(null);
   const [input, setInput] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
@@ -224,9 +223,9 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
 
   useEffect(() => {
     if (!advanced) return;
-    fetch("/api/tips")
+    fetch("/api/knowhow")
       .then((r) => r.json())
-      .then((d) => setTips(d.tips ?? []))
+      .then((d) => setTips(d.items ?? []))
       .catch(() => {});
   }, [advanced]);
 
@@ -246,9 +245,8 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       post<{ text: string; truncated: boolean }>("/api/ask", { prompt, tier: mission.tier, history: tier.memory ? done : [] })
         .then((r) => {
           update(id, { response: r.text, truncated: r.truncated });
-          // Beginner: look for a prompt tweak that improved the answer (runs in background).
-          // Advanced: the coach looks for new techniques instead.
-          if (!advanced && done.length)
+          // Look for a prompt tweak that improved the answer (runs in background).
+          if (done.length)
             post<{ found: boolean; knowhow?: Knowhow }>("/api/knowhow/extract", {
               missionId: mission.id,
               previous: done.slice(-3),
@@ -262,7 +260,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         .catch((e) => update(id, { error: String(e.message ?? e) })),
       advanced
         ? post<Coach>("/api/coach", { missionId: mission.id, prompt, history: done.slice(-3) })
-            .then((c) => update(id, { coach: c, knowhow: c.novel }))
+            .then((c) => update(id, { coach: c }))
             .catch(() => {})
         : post<PromptJudge>("/api/judge-prompt", { missionId: mission.id, prompt, turn: done.length + 1 })
             .then((j) => update(id, { judge: j }))
@@ -532,10 +530,7 @@ function TurnView({
         <div className="max-w-[90%] rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-sm">
           <p className="font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
           <p className="mt-1">{turn.knowhow.tip}</p>
-          <p className="mt-1 text-xs text-muted">
-            効いた理由: {turn.knowhow.why} ·{" "}
-            {turn.coach && !turn.coach.novelSaved ? "保存できませんでした（ストレージ未設定）" : "みんなのノウハウ集に保存しました"}
-          </p>
+          <p className="mt-1 text-xs text-muted">効いた理由: {turn.knowhow.why} · みんなのノウハウ集に保存しました</p>
         </div>
       )}
     </div>
@@ -705,7 +700,7 @@ function Result({
   );
 }
 
-/* ---------------- Advanced: coach and tips ---------------- */
+/* ---------------- Advanced: coach and know-how ---------------- */
 
 function CoachView({ coach, onOpenTip }: { coach: Coach; onOpenTip: (id: string) => void }) {
   return (
@@ -725,7 +720,7 @@ function CoachView({ coach, onOpenTip }: { coach: Coach; onOpenTip: (id: string)
       </p>
       {coach.recommend.length > 0 && (
         <div className="space-y-1">
-          <p className="text-muted">このTipsを使うともっと良くなる</p>
+          <p className="text-muted">このノウハウを使うともっと良くなる</p>
           {coach.recommend.map((r) => (
             <button
               key={r.id}
@@ -742,7 +737,7 @@ function CoachView({ coach, onOpenTip }: { coach: Coach; onOpenTip: (id: string)
   );
 }
 
-function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Tip[]; onOpen: (id: string) => void }) {
+function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Knowhow[]; onOpen: (id: string) => void }) {
   const latest = [...turns].reverse().find((t) => t.coach)?.coach;
   const scores = turns.filter((t) => t.coach).map((t) => t.coach!.score);
   return (
@@ -757,13 +752,14 @@ function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Tip[]; onOpen
       </div>
       <div className="rounded-2xl border border-line bg-panel p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-bold">Tips集（{tips.length}件）</p>
+          <p className="text-xs font-bold">みんなのノウハウ（{tips.length}件）</p>
           <Link href="/knowhow" className="text-xs text-violet">
             一覧 →
           </Link>
         </div>
+        {tips.length === 0 && <p className="mt-1 text-xs text-muted">まだありません。頼み方を変えて答えが良くなると、ここにたまります。</p>}
         <ul className="mt-2 space-y-1">
-          {tips.map((t) => {
+          {tips.slice(0, 15).map((t) => {
             const rec = latest?.recommend.some((r) => r.id === t.id);
             return (
               <li key={t.id}>
@@ -773,7 +769,6 @@ function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Tip[]; onOpen
                 >
                   {rec ? "★ " : ""}
                   {t.title}
-                  <span className="ml-1 text-[10px] text-muted">{t.kind}</span>
                 </button>
               </li>
             );
@@ -784,22 +779,29 @@ function TipsPanel({ turns, tips, onOpen }: { turns: Turn[]; tips: Tip[]; onOpen
   );
 }
 
-function TipModal({ tip, onClose }: { tip: Tip; onClose: () => void }) {
+function TipModal({ tip, onClose }: { tip: Knowhow; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-panel p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-bold text-violet">{tip.kind}</span>
-            <h3 className="mt-1 text-lg font-bold">{tip.title}</h3>
+            <span className="rounded-full bg-violet/10 px-2 py-0.5 text-[11px] font-bold text-violet">
+              {AXES.find((a) => a.key === tip.category)?.label ?? tip.category}
+            </span>
+            <h3 className="mt-1 text-lg font-bold">💡 {tip.title}</h3>
           </div>
           <button onClick={onClose} className="text-muted hover:text-foreground" aria-label="閉じる">
             ✕
           </button>
         </div>
-        <p className="mt-1 text-xs text-muted">使う場面: {tip.when}</p>
-        <p className="whitespace-pre-wrap pt-3 text-sm leading-relaxed">{tip.body.replace(/\*\*(.+?)\*\*/g, "$1")}</p>
-        <p className="mt-3 text-[11px] text-muted">出典: {tip.source}</p>
+        <p className="mt-3 text-sm leading-relaxed">{tip.tip}</p>
+        <p className="mt-3 rounded-lg bg-background p-2 text-xs leading-relaxed text-muted">
+          改善前: {tip.before}
+          <br />
+          改善後: {tip.after}
+          <br />
+          効いた理由: {tip.why}
+        </p>
       </div>
     </div>
   );

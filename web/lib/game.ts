@@ -179,25 +179,13 @@ export type Knowhow = {
 
 export const rankOf = (score: number) => RANKS.find((r) => score >= r.min)!;
 
-/* ---------------- Advanced: tips and coach ---------------- */
+/* ---------------- Advanced: coach ---------------- */
 
-// A curated tip stored as web/tips/<id>.md (frontmatter + body).
-export type Tip = {
-  id: string;
-  title: string;
-  kind: "公式" | "実践";
-  source: string;
-  when: string;
-  body: string;
-};
-
-// The coach's review of one prompt in advanced mode.
+// The coach's review of one prompt in advanced mode. Recommendations come from the shared know-how store.
 export type Coach = {
   score: number; // 0-100
   matched: { name: string; source: string }[];
   advice: string;
   recommend: { id: string; title: string; reason: string }[];
-  novel?: Knowhow;
-  novelSaved?: boolean;
   demo?: boolean;
 };
