@@ -292,7 +292,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
       if (step.add === "replace") built = r.trim();
       setAnswer(built);
       // Pause so viewers can read the score, advice and any know-how before the next step.
-      await new Promise((res) => setTimeout(res, 4000));
+      await new Promise((res) => setTimeout(res, 7000));
     }
     setAuto(null);
     setBusy(false);
