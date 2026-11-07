@@ -11,7 +11,7 @@ export const TIERS: Record<
 > = {
   beginner: {
     label: "初心者",
-    aiName: "ちびAI",
+    aiName: "ひよこAI",
     model: "meta/llama-3.1-8b",
     modelLabel: "Llama 3.1 8B",
     maxTokens: 220,
@@ -20,7 +20,7 @@ export const TIERS: Record<
   },
   advanced: {
     label: "上級者",
-    aiName: "かしこAI",
+    aiName: "ニワトリAI",
     model: "anthropic/claude-haiku-5.5",
     modelLabel: "Claude Haiku 5.5",
     maxTokens: 2500,

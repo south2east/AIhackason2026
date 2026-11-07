@@ -221,6 +221,7 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   // Completed exchanges, kept in a ref so the auto-demo loop sees fresh values.
   const doneRef = useRef<{ prompt: string; response: string }[]>([]);
   const [auto, setAuto] = useState<{ step: number; total: number } | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   async function ask(prompt: string): Promise<string | undefined> {
     const id = Date.now();
@@ -305,8 +306,25 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
     return <Result mission={mission} turns={turns} final={final} prev={history.at(-1)} onRetry={onExit} />;
   }
 
+  const last = turns.at(-1);
+  const lj = last?.judge;
+  const lastScore = lj ? promptScore(lj) : null;
+  const chara = mission.tier === "beginner" ? "🐤" : "🐓";
+  const cry = mission.tier === "beginner" ? "ピヨ！" : "コケッ！";
+  const reaction = !last
+    ? `なにをお手伝いしようか？${cry}`
+    : last.response === undefined
+      ? "考え中…"
+      : lastScore === null
+        ? "採点中…"
+        : lastScore >= 75
+          ? `すごくわかりやすい！バッチリ答えられたよ${cry}`
+          : lastScore >= 50
+            ? `だいたいわかったよ。もう少し詳しく教えてくれるとうれしいな${cry}`
+            : `うーん、なにをすればいいのかな…？${cry}`;
+
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4">
       {/* Mission */}
       <header className="rounded-2xl border border-line bg-panel px-5 py-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
@@ -315,10 +333,13 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
           </button>
           <span className={`rounded-full px-3 py-0.5 text-sm font-bold text-white ${TIER_STYLE[mission.tier].badge}`}>{tier.label}</span>
           <h1 className="text-xl font-black sm:text-2xl">{mission.title}</h1>
-          <span
-            className={`ml-auto rounded-full px-4 py-1 text-sm font-bold ${found.length ? "bg-amber-400 text-foreground" : "bg-line text-muted"}`}
-          >
-            💡 見つけたノウハウ {found.length}件
+          <span className="ml-auto flex gap-2">
+            <span className={`rounded-full px-3 py-1 text-sm font-bold ${found.length ? "bg-amber-400" : "bg-line text-muted"}`}>
+              💡 ノウハウ {found.length}件
+            </span>
+            <button onClick={() => setEditorOpen(true)} className="rounded-full bg-violet px-4 py-1 text-sm font-bold text-white hover:brightness-110">
+              📝 成果物を編集・提出{answer ? `（${answer.length}字）` : ""}
+            </button>
           </span>
         </div>
         <p className="mt-2 text-base leading-relaxed">{mission.brief}</p>
@@ -332,23 +353,143 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
         </ol>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Chat */}
-        <section className="flex h-[calc(100vh-2rem)] min-h-[600px] flex-col rounded-2xl border border-line bg-panel shadow-sm">
-          <div className="border-b border-line px-5 py-3">
-            <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
-            <p className="text-sm text-muted">
-              {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"}（{tier.modelLabel}）
-            </p>
+      {/* Stage: AI output above, character in the middle, evaluation below */}
+      <section className="flex flex-col items-center gap-3 rounded-3xl border border-line bg-panel/70 px-4 py-6 shadow-sm">
+        <div className="relative w-full max-w-3xl rounded-3xl border-2 border-line bg-panel p-5 shadow-sm">
+          <p className="mb-1 text-sm font-bold text-muted">{tier.aiName}の答え</p>
+          <div className="max-h-[38vh] overflow-y-auto">
+            {!last ? (
+              <p className="text-base text-muted">下の「お試し」か「自動で完成まで」から始めてみよう。</p>
+            ) : last.error ? (
+              <p className="text-base text-red-600">エラー: {last.error}</p>
+            ) : last.response === undefined ? (
+              <p className="animate-pulse text-base text-muted">考え中…</p>
+            ) : (
+              <p className="whitespace-pre-wrap text-base leading-relaxed">{last.response}</p>
+            )}
           </div>
-          <div className="flex-1 space-y-5 overflow-y-auto p-5">
-            {turns.length === 0 && (
-              <div className="rounded-xl border-2 border-dashed border-line p-5 text-base leading-relaxed text-muted">
-                下の<b className="text-foreground">お試しプロンプト</b>を①→②の順に送ってみよう。
-                <br />
-                頼み方を変えて答えが良くなると、<b className="text-foreground">💡ノウハウ</b>として保存されます。
+          {last?.truncated && <p className="mt-1 text-sm text-amber-600">⚠ 途中で切れました。頼む量を減らそう。</p>}
+          {last?.response && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => setAnswer((a) => `${a}${a ? "\n\n" : ""}${last.response!.trim()}`)}
+                className="rounded-lg bg-violet px-3 py-1.5 text-sm font-bold text-white hover:brightness-110"
+              >
+                成果物に追加
+              </button>
+              {!tier.memory && (
+                <button onClick={() => quote(last.response!)} className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-lime">
+                  次のお願いに貼る
+                </button>
+              )}
+            </div>
+          )}
+          <span className="absolute -bottom-2.5 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-line bg-panel" />
+        </div>
+
+        <div className="flex flex-col items-center">
+          <span className={`select-none text-[88px] leading-none ${busy ? "animate-bounce" : ""}`} role="img" aria-label={tier.aiName}>
+            {chara}
+          </span>
+          <span className="mt-1 text-sm font-bold">{tier.aiName}</span>
+          <span className="mt-1 text-center text-base">{reaction}</span>
+        </div>
+
+        {last && (
+          <div className="w-full max-w-3xl rounded-2xl border border-line bg-background p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted">直前のあなたのお願い（{turns.length}回目）の評価</p>
+              {lastScore !== null ? <ScoreBadge score={lastScore} /> : <span className="text-sm text-muted">採点中…</span>}
+            </div>
+            <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted">{last.prompt}</p>
+            {lj && (
+              <>
+                <p className="mt-2 text-base">
+                  <span className="font-bold text-violet">アドバイス:</span> {lj.advice}
+                </p>
+                <details className="mt-1 text-sm">
+                  <summary className="cursor-pointer text-muted">詳しい採点とお手本を見る</summary>
+                  <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-6">
+                    {AXES.map((a) => (
+                      <div key={a.key} title={a.source}>
+                        <p className="text-xs text-muted">{a.label}</p>
+                        <div className="h-2 rounded bg-line">
+                          <div className="h-2 rounded bg-lime" style={{ width: `${(lj[a.key] / 5) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2">
+                    <span className="text-lime">◎</span> {lj.good}
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-panel p-2">{lj.improved}</p>
+                  <button onClick={() => setInput(lj.improved)} className="mt-2 rounded-lg border border-violet px-2 py-1 text-violet">
+                    このお手本を入力欄へ
+                  </button>
+                </details>
+              </>
+            )}
+            {last.knowhow && (
+              <div className="mt-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-3">
+                <p className="text-lg font-bold">💡 ノウハウ発見！「{last.knowhow.title}」</p>
+                <p className="mt-1 text-base">{last.knowhow.tip}</p>
+                <p className="mt-1 text-sm text-muted">みんなのノウハウ集に保存しました</p>
               </div>
             )}
+          </div>
+        )}
+      </section>
+
+      {/* Input */}
+      <section className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <button
+            onClick={autoRun}
+            disabled={busy}
+            className="rounded-full bg-amber-400 px-4 py-1 text-sm font-black text-foreground shadow-sm hover:brightness-105 disabled:opacity-50"
+          >
+            {auto ? `自動プレイ中… ${auto.step}/${auto.total}` : "▶ 自動で完成までやってみる（デモ）"}
+          </button>
+          <span className="text-sm font-bold text-muted">お試し:</span>
+          {mission.examples.map((ex) => (
+            <button
+              key={ex.label}
+              onClick={() => {
+                setInput(ex.prompt);
+                inputRef.current?.focus();
+              }}
+              className="rounded-full border-2 border-violet/40 px-3 py-1 text-sm font-bold text-violet hover:bg-violet/10"
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-3">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value.slice(0, PROMPT_MAX_CHARS))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+            }}
+            rows={3}
+            placeholder={`${tier.aiName}へのお願いを書く（Ctrl+Enterで送信）`}
+            className="flex-1 resize-y rounded-xl border-2 border-line bg-background p-3 text-base outline-none focus:border-lime"
+          />
+          <button
+            onClick={send}
+            disabled={busy || !input.trim()}
+            className="self-end rounded-xl bg-lime px-8 py-3 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
+          >
+            {busy ? "考え中…" : "送信"}
+          </button>
+        </div>
+      </section>
+
+      {turns.length > 0 && (
+        <details className="rounded-2xl border border-line bg-panel p-4">
+          <summary className="cursor-pointer text-sm font-bold text-muted">これまでのやり取りを見る（{turns.length}回）</summary>
+          <div className="mt-4 space-y-5">
             {turns.map((t, i) => (
               <TurnView
                 key={t.id}
@@ -360,83 +501,52 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
                 onRetry={(p) => setInput(p)}
               />
             ))}
-            <div ref={bottom} />
           </div>
-          <div className="border-t border-line p-4">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <button
-                onClick={autoRun}
-                disabled={busy}
-                className="rounded-full bg-amber-400 px-4 py-1 text-sm font-black text-foreground shadow-sm hover:brightness-105 disabled:opacity-50"
-              >
-                {auto ? `自動プレイ中… ${auto.step}/${auto.total}` : "▶ 自動で完成までやってみる（デモ）"}
+        </details>
+      )}
+
+      {/* Answer editor (pop-up) */}
+      {editorOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditorOpen(false)}>
+          <div className="flex h-[85vh] w-full max-w-3xl flex-col rounded-2xl bg-panel p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xl font-bold">📝 提出するもの</p>
+                <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
+              </div>
+              <button onClick={() => setEditorOpen(false)} className="text-2xl text-muted hover:text-foreground" aria-label="閉じる">
+                ✕
               </button>
-              <span className="text-sm font-bold text-muted">お試し:</span>
-              {mission.examples.map((ex) => (
-                <button
-                  key={ex.label}
-                  onClick={() => {
-                    setInput(ex.prompt);
-                    inputRef.current?.focus();
-                  }}
-                  className="rounded-full border-2 border-violet/40 px-3 py-1 text-sm font-bold text-violet hover:bg-violet/10"
-                >
-                  {ex.label}
-                </button>
-              ))}
             </div>
             <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value.slice(0, PROMPT_MAX_CHARS))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
-              }}
-              rows={2}
-              placeholder={`${tier.aiName}へのお願いを書く（Ctrl+Enterで送信）`}
-              className="w-full resize-y rounded-xl border-2 border-line bg-background p-3 text-base outline-none focus:border-lime"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              className="mt-3 w-full flex-1 resize-none rounded-xl border-2 border-line bg-background p-4 text-base leading-relaxed outline-none focus:border-violet"
+              placeholder="ここに完成品を組み立てる"
             />
-            <div className="mt-2 flex justify-end">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <button
-                onClick={send}
-                disabled={busy || !input.trim()}
-                className="rounded-xl bg-lime px-8 py-2.5 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
+                onClick={() => setAnswer(mission.sample)}
+                className="rounded-lg border border-line px-3 py-2 text-sm text-muted hover:border-violet hover:text-violet"
               >
-                {busy ? "考え中…" : "送信"}
+                完成例を入れる（デモ用）
+              </button>
+              <button
+                onClick={() => submit()}
+                disabled={submitting || !answer.trim() || turns.length === 0}
+                className="rounded-xl bg-violet px-8 py-3 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
+              >
+                {submitting ? "審査中…" : "提出して AI適合度 を見る"}
               </button>
             </div>
           </div>
-        </section>
-
-        {/* Answer */}
-        <section className="flex h-[calc(100vh-2rem)] min-h-[600px] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-lg font-bold">② 提出するもの</p>
-              <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
-            </div>
-            <button
-              onClick={() => setAnswer(mission.sample)}
-              className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:border-violet hover:text-violet"
-            >
-              完成例を入れる（デモ用）
-            </button>
-          </div>
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            className="mt-3 w-full flex-1 resize-none rounded-xl border-2 border-line bg-background p-4 text-base leading-relaxed outline-none focus:border-violet"
-            placeholder="ここに完成品を組み立てる"
-          />
-          <button
-            onClick={() => submit()}
-            disabled={submitting || !answer.trim() || turns.length === 0}
-            className="mt-3 rounded-xl bg-violet px-5 py-3 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
-          >
-            {submitting ? "審査中…" : "提出して AI適合度 を見る"}
-          </button>
-        </section>
-      </div>
+        </div>
+      )}
+      {submitting && !editorOpen && (
+        <div className="fixed inset-x-0 bottom-6 z-30 mx-auto w-fit rounded-full bg-foreground px-6 py-3 font-bold text-white shadow-xl">
+          審査中…
+        </div>
+      )}
     </main>
   );
 }
