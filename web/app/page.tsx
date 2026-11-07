@@ -265,7 +265,6 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
     inputRef.current?.focus();
   };
 
-  const axes = avgAxes(turns);
   const found = turns.filter((t) => t.knowhow).map((t) => t.knowhow!);
 
   if (final) {
@@ -273,139 +272,127 @@ function Play({ mission, onExit, history }: { mission: Mission; onExit: () => vo
   }
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-4 lg:h-screen lg:grid-cols-[280px_minmax(0,1fr)_360px]">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 lg:h-screen">
       {/* Mission */}
-      <aside className="flex flex-col gap-4 lg:overflow-y-auto">
-        <button onClick={onExit} className="self-start text-sm text-muted hover:text-foreground">
-          ← ミッション一覧
-        </button>
-        <div className="rounded-2xl border border-line bg-panel p-4">
-          <span className={`rounded-full px-3 py-0.5 text-xs font-bold text-white ${TIER_STYLE[mission.tier].badge}`}>{tier.label}</span>
-          <h2 className="mt-2 text-lg font-bold">{mission.title}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted">{mission.brief}</p>
-          <p className="mt-4 text-xs font-bold text-lime">完成条件</p>
-          <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
-            {mission.checklist.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ol>
+      <header className="rounded-2xl border border-line bg-panel px-5 py-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={onExit} className="text-sm text-muted hover:text-foreground">
+            ← 戻る
+          </button>
+          <span className={`rounded-full px-3 py-0.5 text-sm font-bold text-white ${TIER_STYLE[mission.tier].badge}`}>{tier.label}</span>
+          <h1 className="text-xl font-black sm:text-2xl">{mission.title}</h1>
+          <span
+            className={`ml-auto rounded-full px-4 py-1 text-sm font-bold ${found.length ? "bg-amber-400 text-foreground" : "bg-line text-muted"}`}
+          >
+            💡 見つけたノウハウ {found.length}件
+          </span>
         </div>
-        <div className="rounded-2xl border border-line bg-panel p-4">
-          <p className="text-xs font-bold">見つけたノウハウ {found.length}件</p>
-          {found.length === 0 ? (
-            <p className="mt-1 text-xs leading-relaxed text-muted">頼み方を変えて答えが良くなると、ここにたまります。</p>
-          ) : (
-            <ul className="mt-2 space-y-1.5">
-              {found.map((k) => (
-                <li key={k.id} className="rounded-lg bg-amber-50 px-2 py-1.5 text-xs">
-                  <b>💡 {k.title}</b>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="rounded-2xl border border-line bg-panel p-4">
-          <p className="text-xs text-muted">いまのプロンプト力（平均）</p>
-          {axes ? (
-            <div className="flex justify-center">
-              <Radar scores={axes} compare={history.at(-1)?.axes} size={240} />
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted">最初のプロンプトを送ると表示されます。</p>
-          )}
-          {history.at(-1) && <p className="text-center text-xs text-violet">点線 = 前回のあなた</p>}
-        </div>
-      </aside>
+        <p className="mt-2 text-base leading-relaxed">{mission.brief}</p>
+        <ol className="mt-3 flex flex-wrap gap-2">
+          {mission.checklist.map((c, i) => (
+            <li key={c} className="rounded-lg bg-background px-3 py-1.5 text-sm">
+              <b className="mr-1 text-lime">条件{i + 1}</b>
+              {c}
+            </li>
+          ))}
+        </ol>
+      </header>
 
-      {/* Chat */}
-      <section className="flex min-h-[60vh] flex-col rounded-2xl border border-line bg-panel/60 lg:min-h-0">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
-          <div>
-            <p className="font-bold">{tier.aiName}</p>
-            <p className="text-xs text-muted">
-              {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"} · 出力{tier.maxTokens}トークンまで ·{" "}
-              {tier.modelLabel}
+      <div className="grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-2">
+        {/* Chat */}
+        <section className="flex min-h-[70vh] flex-col rounded-2xl border border-line bg-panel shadow-sm lg:min-h-0">
+          <div className="border-b border-line px-5 py-3">
+            <p className="text-lg font-bold">① {tier.aiName}に頼む</p>
+            <p className="text-sm text-muted">
+              {tier.memory ? "会話の流れを覚えています" : "前回までのやり取りを把握していません"}（{tier.modelLabel}）
             </p>
           </div>
-          <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">
-            {turns.length}回目 / 目安{mission.idealPrompts}回
-          </span>
-        </header>
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
-          {turns.length === 0 && (
-            <div className="rounded-xl border border-dashed border-line p-6 text-sm leading-relaxed text-muted">
-              {tier.memory
-                ? "かしこAIは会話の流れを覚えています。答えがいまいちなら、どこをどう直してほしいか伝えてみよう。"
-                : "ちびAIは前回までのやり取りを把握していません。必要な情報は毎回プロンプトに入れて渡そう。全部を一度に頼むと途中で切れます。"}
-              <br />
-              うまくいかなかったら頼み方を変えて再挑戦。答えが良くなった工夫は<b className="text-foreground">ノウハウとして保存</b>されます。
-            </div>
-          )}
-          {turns.map((t, i) => (
-            <TurnView
-              key={t.id}
-              turn={t}
-              n={i + 1}
-              aiName={tier.aiName}
-              onQuote={tier.memory ? undefined : quote}
-              onAdd={(s) => setAnswer((a) => `${a}${a ? "\n\n" : ""}${s.trim()}`)}
-              onRetry={(p) => setInput(p)}
-            />
-          ))}
-          <div ref={bottom} />
-        </div>
-        <div className="border-t border-line p-3">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value.slice(0, PROMPT_MAX_CHARS))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
-            }}
-            rows={4}
-            placeholder={`${tier.aiName}へのプロンプト（Ctrl+Enterで送信）`}
-            className="w-full resize-y rounded-xl border border-line bg-background p-3 text-sm outline-none focus:border-lime"
-          />
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-muted">
-              {input.length} / {PROMPT_MAX_CHARS}字
-            </span>
-            <button
-              onClick={send}
-              disabled={busy || !input.trim()}
-              className="rounded-xl bg-lime px-5 py-2 font-bold text-white transition hover:brightness-110 disabled:opacity-40"
-            >
-              {busy ? "考え中…" : "送信"}
-            </button>
+          <div className="flex-1 space-y-5 overflow-y-auto p-5">
+            {turns.length === 0 && (
+              <div className="rounded-xl border-2 border-dashed border-line p-5 text-base leading-relaxed text-muted">
+                下の<b className="text-foreground">お試しプロンプト</b>を①→②の順に送ってみよう。
+                <br />
+                頼み方を変えて答えが良くなると、<b className="text-foreground">💡ノウハウ</b>として保存されます。
+              </div>
+            )}
+            {turns.map((t, i) => (
+              <TurnView
+                key={t.id}
+                turn={t}
+                n={i + 1}
+                aiName={tier.aiName}
+                onQuote={tier.memory ? undefined : quote}
+                onAdd={(s) => setAnswer((a) => `${a}${a ? "\n\n" : ""}${s.trim()}`)}
+                onRetry={(p) => setInput(p)}
+              />
+            ))}
+            <div ref={bottom} />
           </div>
-        </div>
-      </section>
+          <div className="border-t border-line p-4">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-muted">お試しプロンプト:</span>
+              {mission.examples.map((ex) => (
+                <button
+                  key={ex.label}
+                  onClick={() => {
+                    setInput(ex.prompt);
+                    inputRef.current?.focus();
+                  }}
+                  className="rounded-full border-2 border-violet/40 px-3 py-1 text-sm font-bold text-violet hover:bg-violet/10"
+                >
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value.slice(0, PROMPT_MAX_CHARS))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+              }}
+              rows={3}
+              placeholder={`${tier.aiName}へのお願いを書く（Ctrl+Enterで送信）`}
+              className="w-full resize-y rounded-xl border-2 border-line bg-background p-3 text-base outline-none focus:border-lime"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={send}
+                disabled={busy || !input.trim()}
+                className="rounded-xl bg-lime px-8 py-2.5 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
+              >
+                {busy ? "考え中…" : "送信"}
+              </button>
+            </div>
+          </div>
+        </section>
 
-      {/* Answer */}
-      <section className="flex flex-col rounded-2xl border border-line bg-panel p-4">
-        <p className="font-bold">成果物</p>
-        <p className="text-xs text-muted">AIの答えを「成果物に追加」で集め、自由に編集して提出。</p>
-        <textarea
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          className="mt-3 min-h-[40vh] w-full flex-1 resize-none rounded-xl border border-line bg-background p-3 text-sm leading-relaxed outline-none focus:border-violet"
-          placeholder="ここに完成品を組み立てる"
-        />
-        <button
-          onClick={submit}
-          disabled={submitting || !answer.trim() || turns.length === 0}
-          className="mt-3 rounded-xl bg-violet px-5 py-3 font-bold text-white transition hover:brightness-110 disabled:opacity-40"
-        >
-          {submitting ? "審査中…" : "提出して AI適合度 を見る"}
-        </button>
-      </section>
+        {/* Answer */}
+        <section className="flex min-h-[60vh] flex-col rounded-2xl border border-line bg-panel p-5 shadow-sm lg:min-h-0">
+          <p className="text-lg font-bold">② 提出するもの</p>
+          <p className="text-sm text-muted">AIの答えの「成果物に追加」で集めて、自由に直してから提出。</p>
+          <textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            className="mt-3 w-full flex-1 resize-none rounded-xl border-2 border-line bg-background p-4 text-base leading-relaxed outline-none focus:border-violet"
+            placeholder="ここに完成品を組み立てる"
+          />
+          <button
+            onClick={submit}
+            disabled={submitting || !answer.trim() || turns.length === 0}
+            className="mt-3 rounded-xl bg-violet px-5 py-3 text-lg font-bold text-white transition hover:brightness-110 disabled:opacity-40"
+          >
+            {submitting ? "審査中…" : "提出して AI適合度 を見る"}
+          </button>
+        </section>
+      </div>
     </main>
   );
 }
 
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 75 ? "bg-lime text-white" : score >= 50 ? "bg-violet text-white" : "bg-line";
-  return <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${color}`}>{score}点</span>;
+  return <span className={`rounded-full px-3 py-0.5 text-sm font-bold ${color}`}>{score}点</span>;
 }
 
 function TurnView({
@@ -423,68 +410,60 @@ function TurnView({
   onAdd: (s: string) => void;
   onRetry: (s: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
   const j = turn.judge;
   return (
-    <div className="space-y-2">
-      <div className="ml-auto max-w-[90%] rounded-2xl rounded-tr-sm border border-line bg-background p-3">
+    <div className="space-y-3">
+      <div className="ml-auto max-w-[92%] rounded-2xl rounded-tr-sm border border-line bg-background p-4">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-xs text-muted">あなた · {n}回目</span>
-          {j ? <ScoreBadge score={promptScore(j)} /> : <span className="text-xs text-muted">採点中…</span>}
+          <span className="text-sm text-muted">あなた · {n}回目</span>
+          {j ? <ScoreBadge score={promptScore(j)} /> : <span className="text-sm text-muted">採点中…</span>}
         </div>
-        <p className="whitespace-pre-wrap text-sm">{turn.prompt}</p>
+        <p className="whitespace-pre-wrap text-base">{turn.prompt}</p>
         {j && (
-          <div className="mt-3 border-t border-line pt-2">
-            <div className="grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-6">
-              {AXES.map((a) => (
-                <div key={a.key} title={a.source}>
-                  <p className="text-[10px] text-muted">{a.label}</p>
-                  <div className="h-1.5 rounded bg-line">
-                    <div className="h-1.5 rounded bg-lime" style={{ width: `${(j[a.key] / 5) * 100}%` }} />
+          <div className="mt-3 border-t border-line pt-2 text-sm leading-relaxed">
+            <p>
+              <span className="font-bold text-violet">アドバイス:</span> {j.advice}
+            </p>
+            <details className="mt-1">
+              <summary className="cursor-pointer text-muted">詳しい採点とお手本を見る</summary>
+              <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5">
+                {AXES.map((a) => (
+                  <div key={a.key} title={a.source}>
+                    <p className="text-xs text-muted">{a.label}</p>
+                    <div className="h-2 rounded bg-line">
+                      <div className="h-2 rounded bg-lime" style={{ width: `${(j[a.key] / 5) * 100}%` }} />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setOpen(!open)} className="mt-2 text-xs text-violet">
-              {open ? "▼" : "▶"} 化けるためのアドバイス{j.demo ? "（デモ）" : ""}
-            </button>
-            {open && (
-              <div className="mt-1 space-y-1 text-xs leading-relaxed">
-                <p>
-                  <span className="text-lime">◎</span> {j.good}
-                </p>
-                <p>
-                  <span className="text-violet">↑</span> {j.advice}
-                </p>
-                <details className="rounded-lg bg-panel p-2">
-                  <summary className="cursor-pointer text-muted">お手本の書き方を見る</summary>
-                  <p className="mt-2 whitespace-pre-wrap">{j.improved}</p>
-                  <button onClick={() => onRetry(j.improved)} className="mt-2 rounded-lg border border-violet px-2 py-1 text-violet">
-                    この書き方を入力欄へ
-                  </button>
-                </details>
+                ))}
               </div>
-            )}
+              <p className="mt-2">
+                <span className="text-lime">◎</span> {j.good}
+              </p>
+              <p className="mt-2 whitespace-pre-wrap rounded-lg bg-panel p-2">{j.improved}</p>
+              <button onClick={() => onRetry(j.improved)} className="mt-2 rounded-lg border border-violet px-2 py-1 text-violet">
+                このお手本を入力欄へ
+              </button>
+            </details>
           </div>
         )}
       </div>
-      <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-line/60 p-3">
-        <p className="mb-1 text-xs text-muted">{aiName}</p>
+      <div className="max-w-[92%] rounded-2xl rounded-tl-sm bg-line/60 p-4">
+        <p className="mb-1 text-sm text-muted">{aiName}</p>
         {turn.error ? (
-          <p className="text-sm text-red-600">エラー: {turn.error}</p>
+          <p className="text-base text-red-600">エラー: {turn.error}</p>
         ) : turn.response === undefined ? (
-          <p className="animate-pulse text-sm text-muted">…</p>
+          <p className="animate-pulse text-base text-muted">考え中…</p>
         ) : (
           <>
-            <p className="whitespace-pre-wrap text-sm">{turn.response}</p>
-            {turn.truncated && <p className="mt-1 text-xs text-amber-600">⚠ 出力上限で途中で切れました。頼む量を減らそう。</p>}
-            <div className="mt-2 flex gap-2">
-              <button onClick={() => onAdd(turn.response!)} className="rounded-lg bg-violet/20 px-2 py-1 text-xs hover:bg-violet/30">
-                成果物に追加
+            <p className="whitespace-pre-wrap text-base">{turn.response}</p>
+            {turn.truncated && <p className="mt-1 text-sm text-amber-600">⚠ 途中で切れました。頼む量を減らそう。</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => onAdd(turn.response!)} className="rounded-lg bg-violet px-3 py-1.5 text-sm font-bold text-white hover:brightness-110">
+                成果物に追加 →
               </button>
               {onQuote && (
-                <button onClick={() => onQuote(turn.response!)} className="rounded-lg border border-line px-2 py-1 text-xs hover:border-lime">
-                  次のプロンプトに資料として貼る
+                <button onClick={() => onQuote(turn.response!)} className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-lime">
+                  次のお願いに貼る
                 </button>
               )}
             </div>
@@ -492,10 +471,10 @@ function TurnView({
         )}
       </div>
       {turn.knowhow && (
-        <div className="max-w-[90%] rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-sm">
-          <p className="font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
-          <p className="mt-1">{turn.knowhow.tip}</p>
-          <p className="mt-1 text-xs text-muted">効いた理由: {turn.knowhow.why} · みんなのノウハウ集に保存しました</p>
+        <div className="max-w-[92%] rounded-2xl border-2 border-amber-400 bg-amber-50 p-4">
+          <p className="text-lg font-bold">💡 ノウハウ発見！「{turn.knowhow.title}」</p>
+          <p className="mt-1 text-base">{turn.knowhow.tip}</p>
+          <p className="mt-1 text-sm text-muted">みんなのノウハウ集に保存しました</p>
         </div>
       )}
     </div>
